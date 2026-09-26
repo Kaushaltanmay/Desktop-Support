@@ -1,79 +1,106 @@
-# 🛠️ Desktop Support Command Center
+# Desktop IT Support & HRMS — Fly Media Technology
 
-> Enterprise IT Fleet Telemetry, Real-Time Hardware Diagnostics, Incident Ticket Queue & Automated Remediation Console.
+A unified, full-stack enterprise operations platform built specifically for **Fly Media Technology**, combining two core business systems under a single identity and database:
 
----
-
-## ⚡ Features Overview
-
-- 💻 **Fleet & Hardware Telemetry**:
-  - Live CPU, Memory (RAM), Disk usage, Temperature (°C), and Ping latency telemetry meters.
-  - Endpoint health classification (`Online`, `Warning`, `Critical`, `Offline`).
-  - Deep Endpoint Diagnostics modal with one-click remote RPC actions:
-    - Host Ping Latency Test
-    - DNS Resolver Cache Flush
-    - Print Spooler Total Purge & Restart
-    - DxDiag & Hardware Spec Exporter
-- 🎫 **Incidents & Ticket Dispatch Queue**:
-  - Multi-tier filtering by Status (`Open`, `In Progress`, `Waiting Vendor`, `Resolved`), Priority (`Critical`, `High`, `Medium`, `Low`), and Category (`Hardware`, `Network`, `OS / Software`, `Access & Security`, `Peripherals`).
-  - Interactive ticket inspection drawer with live technician notes log.
-  - Direct incident creation modal with device assignment and urgency classification.
-- ⚡ **Automated Support Runbooks (Remediation Toolbox)**:
-  - 1-click remediation scripts for Windows workstation issues (Winsock reset, Print spooler purge, SoftwareDistribution cache wipe, DISM & SFC scans, Kerberos ticket reset).
-  - Streaming simulated remote PowerShell execution console.
-  - One-click script command clipboard copier.
-- 💻 **Live IT Terminal (Interactive PowerShell CLI Emulator)**:
-  - Built-in floating terminal console.
-  - Supports diagnostic commands: `help`, `ping <ip>`, `ipconfig`, `ipconfig /all`, `flushdns`, `systeminfo`, `sfc /scannow`, `gpupdate /force`, `get-service`, `netstat`, `whoami`, `clear`.
-  - Command history navigation (Up / Down arrow keys).
-- 📊 **SLA Compliance & Service Desk Analytics**:
-  - Live SLA Compliance rate (96.4%), MTTA (3.2 min), MTTR (16.8 min), and CSAT (98.9%).
-  - Category workload distribution breakdown.
-  - Desktop Support technician leaderboard.
-- 📚 **Knowledge Base & Standard Operating Procedures (SOPs)**:
-  - Searchable troubleshooting procedures for BitLocker recovery loops, Outlook loading hangs, docking station flickers, and display driver clean installs.
+1. **💻 Desktop IT Support**: IT Helpdesk, Workstation Hardware Telemetry (38 Systems, RAM distribution, asset tags `SN33`, `SN29`, `SN01`), Incident Triage, Remote Resolution, and Turnaround Timelines.
+2. **👥 HRMS & Attendance Portal**: Biometric & GPS Geofence Punch In / Punch Out (Strict 500m office boundary), Work Schedules & Grace Periods, Overtime & Late Tracking, Leave Quota Management & HR Approvals, Workforce Live Roster, and Audited Corrections.
 
 ---
 
-## 🚀 Getting Started
+## 🌟 Visual & Architectural Highlights
 
-### Prerequisites
+- **Fly Media Technology Brand Identity:** Clean modern SaaS design system with authentic company logo ([`public/flymedia_logo.png`](file:///c:/Tanmay/Desktop%20Support/public/flymedia_logo.png)), rounded cards (`border-radius: 14px`), soft shadows, and vibrant status badges.
+- **Unified Identity & Single Sign-On:** Both the IT Desk and HRMS share the exact same user identity, database, and notifications. An employee can punch in and raise an IT ticket without logging into separate accounts!
+- **1-Click App Switcher:** The top header features a smooth application switcher allowing staff and employees to toggle between **"💻 IT Support"** and **"👥 HR Portal"** instantly.
+- **Strict Server-Side Geofencing:**
+  - Independent Haversine distance validation on the backend.
+  - Requires employee to be within **500 meters** of the registered office (Fly Media Technology Ludhiana HQ: `30.9010, 75.8573`).
+  - Outside 500m requests are automatically rejected with exact distance readouts.
+- **Immutable Audit Trail:** All ticket actions, hardware additions, attendance events, HR manual corrections, and leave decisions are permanently logged in the `audit_logs` table.
+- **Mobile-Ready REST APIs:** Built decoupled for web and future **React Native / Expo** mobile applications.
 
-- [Node.js](https://nodejs.org/) v18+ (tested on Node v22.14.0)
-- npm / yarn / pnpm
+---
 
-### Installation
+## 🚀 Quick Start Guide
 
+### 1. Prerequisites
+- **Node.js**: v18+ (tested on Node v22.14.0)
+- **Package Manager**: npm
+
+### 2. Installation
 ```bash
-# Clone or navigate to the directory
+# Navigate to the repository
 cd "Desktop Support"
 
 # Install dependencies
 npm install
+```
 
-# Start the development server
+### 3. Running the Platform
+
+In two terminal windows:
+
+#### Terminal 1: Backend API Server (Port 5000)
+```bash
+npx tsx server/server.ts
+```
+The server will initialize the SQLite database with WAL mode (`server/desktop_support.db`), foreign keys, and seed all departments, employees, 38 workstations, office locations, work schedules, leave balances, and holidays.
+
+#### Terminal 2: Frontend Web App (Port 5173)
+```bash
 npm run dev
 ```
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
-Open [http://localhost:5173/](http://localhost:5173/) in your web browser.
+---
 
-### Production Build
+## 👥 Demo Accounts (Ready to Test)
 
+The login screen includes **1-Click Demo Profile Switchers**:
+
+| Role | Name | Email | Password | Primary Desk |
+|---|---|---|---|---|
+| **HR Lead (Operations)** | Simran Kaur | `hr@flymedia.com` | `Password@123` | HR Management Portal |
+| **IT Engineer (Lead)** | Tanmay Kaushal | `tanmay@flymedia.com` | `Password@123` | IT Operations Command |
+| **System Admin** | System Administrator | `admin@flymedia.com` | `Password@123` | Global Administration |
+| **Employee** | Sarvesh Kumar | `sarvesh@flymedia.com` | `Password@123` | Digital Marketing bay (`SN33`) |
+| **Employee** | Manmohan Singh | `manmohan@flymedia.com` | `Password@123` | Web Development bay (`SN29`) |
+| **Employee** | Priya Patel | `priya@flymedia.com` | `Password@123` | UI/UX Design tower (`SN18`) |
+
+---
+
+## 🧪 Automated Verification Test Suites
+
+Both applications feature complete end-to-end automated test suites:
+
+### 1. Desktop IT Support Test Suite
+Verifies ticket creation, IT engineer triage, ticket assignment, employee notifications, resolution turnaround duration calculation, ticket reopening, and device provisioning:
+```bash
+npx tsx test_flows.ts
+```
+
+### 2. HRMS & Geolocation Attendance Test Suite
+Verifies 500m geofence rejection, inside-boundary punch in, single punch-in enforcement, working duration & overtime calculation, leave application, leave balance deduction, HR approvals, and manual audited attendance corrections:
+```bash
+npx tsx test_hrms_backend.ts
+```
+
+### 3. Production Build Validation
 ```bash
 npm run build
-npm run preview
 ```
 
 ---
 
-## 🏗️ Tech Stack
+## 📱 Mobile App Compatibility (React Native / Expo)
 
-- **Framework**: React 19 + Vite + TypeScript
-- **Styling**: Cyber-Glassmorphism Custom Design Tokens (Vanilla CSS)
-- **Typography**: Google Fonts (`Outfit` + `JetBrains Mono`)
-- **Icons**: Lucide React
-- **Version Control**: Git
+See [`docs/API.md`](file:///c:/Tanmay/Desktop%20Support/docs/API.md) for full endpoint specifications.
+
+The backend REST API is 100% decoupled from the web UI, allowing iOS and Android mobile applications to:
+* Acquire GPS coordinates via `expo-location` and verify 500m geofences.
+* Punch in and out with live turnaround times.
+* Submit and review leave applications with push notifications.
 
 ---
 
-*Engineered by Kaushaltanmay • Desktop Support Operations*
+*Fly Media Technology Internal Operations Platform • Desktop IT Support & HRMS Suite*

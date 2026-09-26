@@ -1,0 +1,81 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { initDatabase } from './db';
+import authRoutes from './routes/auth';
+import ticketRoutes from './routes/tickets';
+import dashboardRoutes from './routes/dashboard';
+import deviceRoutes from './routes/devices';
+import userRoutes from './routes/users';
+import auditRoutes from './routes/audit';
+import notificationRoutes from './routes/notifications';
+import reportRoutes from './routes/reports';
+import attendanceRoutes from './routes/attendance';
+import leaveRoutes from './routes/leaves';
+import hrDashboardRoutes from './routes/hrDashboard';
+import officeRoutes from './routes/offices';
+import holidayRoutes from './routes/holidays';
+import scheduleRoutes from './routes/schedules';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors({
+  origin: '*', // Allow web app & mobile app clients
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Initialize SQLite database and seed data
+initDatabase();
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'online',
+    app: 'Desktop IT Support & HRMS API',
+    organization: 'Fly Media Technology',
+    version: '2.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/devices', deviceRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/audit-logs', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/reports', reportRoutes);
+
+// HRMS Routes
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/hr', hrDashboardRoutes);
+app.use('/api/offices', officeRoutes);
+app.use('/api/holidays', holidayRoutes);
+app.use('/api/work-schedules', scheduleRoutes);
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[API ERROR]', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error'
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`=======================================================`);
+  console.log(`🚀 Desktop IT Support API Server running on port ${PORT}`);
+  console.log(`🌐 Base URL: http://localhost:${PORT}/api`);
+  console.log(`=======================================================`);
+});
+
+export default app;
