@@ -239,10 +239,45 @@ export function initDatabase() {
       is_read INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 5. Team Feedback & Workplace Grievance Reporting (Direct to HR)
+    CREATE TABLE IF NOT EXISTS team_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      reported_against_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      category TEXT NOT NULL,
+      severity TEXT DEFAULT 'MEDIUM' CHECK(severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+      subject TEXT NOT NULL,
+      description TEXT NOT NULL,
+      is_anonymous INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'SUBMITTED' CHECK(status IN ('SUBMITTED', 'UNDER_REVIEW', 'ACTION_TAKEN', 'RESOLVED', 'DISMISSED')),
+      hr_notes TEXT,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 6. Team Chat & Media Messages (WhatsApp-style communication, Files, Audio, Video & Calls)
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      message_text TEXT,
+      message_type TEXT DEFAULT 'TEXT' CHECK(message_type IN ('TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT', 'FILE', 'CALL_LOG')),
+      file_url TEXT,
+      file_name TEXT,
+      file_size INTEGER,
+      file_mime TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_sender_recipient ON chat_messages(sender_id, recipient_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_created_at ON chat_messages(created_at);
   `);
 
   seedData();
   seedHrmsData();
+  seedChatData();
 }
 
 function migrateUsersTableIfNeeded() {
@@ -573,5 +608,67 @@ function seedHrmsData() {
       INSERT INTO leave_requests (employee_id, leave_type_id, start_date, end_date, number_of_days, reason, status)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(7, 1, today, today, 1.0, 'Personal family commitment and urgent bank errands.', 'PENDING');
+  }
+}
+
+function seedChatData() {
+  const count = db.prepare("SELECT count(*) as count FROM chat_messages").get() as any;
+  if (count.count === 0) {
+    console.log('[DATABASE] Seeding realistic WhatsApp-style team chat messages...');
+    const now = new Date();
+    const tMinus = (mins: number) => new Date(now.getTime() - mins * 60000).toISOString().replace('T', ' ').substring(0, 19);
+
+    const insertMsg = db.prepare(`
+      INSERT INTO chat_messages (
+        sender_id, recipient_id, message_text, message_type,
+        file_url, file_name, file_size, file_mime, is_read, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // Broadcast messages in #general channel (recipient_id = NULL)
+    insertMsg.run(
+      1, null,
+      'Welcome to Fly Media Technology Live Team Hub! 🚀 You can message any team member, share files, videos, audios, and hop on instant voice/video calls or share your PC screen.',
+      'TEXT', null, null, null, null, 1, tMinus(180)
+    );
+    insertMsg.run(
+      3, null,
+      'Hey everyone! The monthly marketing campaign assets and sprint targets have been published. Great energy this week! 🙌',
+      'TEXT', null, null, null, null, 1, tMinus(120)
+    );
+
+    // Tanmay (id 2) <-> Aditi Verma (id 3)
+    insertMsg.run(
+      3, 2,
+      'Hi Tanmay! Could you check my workstation display cable? It flickers intermittently when moving the monitor.',
+      'TEXT', null, null, null, null, 1, tMinus(45)
+    );
+    insertMsg.run(
+      2, 3,
+      'Hey Aditi, sure thing! I will come over with a replacement DisplayPort cable and check the GPU drivers in 10 minutes.',
+      'TEXT', null, null, null, null, 1, tMinus(30)
+    );
+    insertMsg.run(
+      3, 2,
+      'Awesome, thank you Tanmay! 🙏',
+      'TEXT', null, null, null, null, 1, tMinus(20)
+    );
+
+    // Tanmay (id 2) <-> Manmohan Singh (id 5)
+    insertMsg.run(
+      5, 2,
+      'Hey Tanmay, did you deploy the latest Node & Mongo database build?',
+      'TEXT', null, null, null, null, 1, tMinus(50)
+    );
+    insertMsg.run(
+      2, 5,
+      'Yes Manmohan, running live and verified on port 5000 and 27017 with live telemetry.',
+      'TEXT', null, null, null, null, 1, tMinus(40)
+    );
+    insertMsg.run(
+      5, 2,
+      'Great job bro! Everything is super responsive and smooth.',
+      'TEXT', null, null, null, null, 1, tMinus(15)
+    );
   }
 }

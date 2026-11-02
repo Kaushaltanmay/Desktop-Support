@@ -229,3 +229,77 @@ input:focus, select:focus, textarea:focus {
 .animate-fade-in {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Mobile & Capacitor App Optimizations */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile Bottom Navigation Bar: Visible ONLY on mobile/touch screens (< 768px), strictly hidden on desktop */
+.mobile-bottom-nav {
+  display: flex !important;
+}
+
+@media (min-width: 769px) {
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    padding-top: max(38px, var(--safe-top)) !important;
+    height: calc(64px + max(38px, var(--safe-top))) !important;
+  }
+
+  .sidebar-desktop {
+    display: none !important;
+  }
+
+  .mobile-hamburger-btn {
+    display: flex !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  .header-brand-text {
+    display: none !important;
+  }
+
+  .header-server-text {
+    display: none !important;
+  }
+
+  .app-switcher-text {
+    font-size: 0.72rem;
+  }
+
+  .app-main-content {
+    padding: 16px 14px 84px 14px !important;
+  }
+
+  /* Grid adaptations for mobile viewports */
+  .grid-responsive-cards {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-responsive-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Tables horizontal scrollwrapper */
+  .table-responsive-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-responsive-stats {
+    grid-template-columns: 1fr !important;
+  }
+}
+

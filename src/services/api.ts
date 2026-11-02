@@ -1,6 +1,36 @@
-// REST API Client for Desktop IT Support
+import { Capacitor } from '@capacitor/core';
 
-const API_BASE = '/api';
+export const DEFAULT_LAN_API = 'http://192.168.1.72:5000/api';
+export const DEFAULT_EMULATOR_API = 'http://10.0.2.2:5000/api';
+
+export function getApiBase(): string {
+  // 1. Check user-configured override in localStorage
+  const saved = localStorage.getItem('desktop_support_api_url');
+  if (saved && saved.trim()) {
+    return saved.trim().replace(/\/$/, '');
+  }
+
+  // 2. Check Vite environment variable
+  if (import.meta.env.VITE_API_URL) {
+    return (import.meta.env.VITE_API_URL as string).replace(/\/$/, '');
+  }
+
+  // 3. If running on native mobile device (Capacitor Android / iOS)
+  if (Capacitor.isNativePlatform()) {
+    return DEFAULT_EMULATOR_API;
+  }
+
+  // 4. Default web proxy
+  return '/api';
+}
+
+export function setApiBase(url: string): void {
+  if (!url || !url.trim()) {
+    localStorage.removeItem('desktop_support_api_url');
+  } else {
+    localStorage.setItem('desktop_support_api_url', url.trim().replace(/\/$/, ''));
+  }
+}
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('desktop_support_token');
@@ -8,13 +38,14 @@ function getAuthHeader(): Record<string, string> {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const base = getApiBase();
   const headers = {
     'Content-Type': 'application/json',
     ...getAuthHeader(),
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(`${base}${endpoint}`, {
     ...options,
     headers,
   });
@@ -28,6 +59,18 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  system: {
+    checkHealth: async (customBase?: string) => {
+      const base = (customBase || getApiBase()).replace(/\/$/, '');
+      const start = Date.now();
+      const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(4000) });
+      const latency = Date.now() - start;
+      if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+      const data = await res.json();
+      return { ok: true, latency, data };
+    }
+  },
+
   auth: {
     login: (credentials: { email: string; password: string }) =>
       request<{ token: string; user: any }>('/auth/login', {
@@ -111,6 +154,15 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
+    delete: (id: number) =>
+      request<{ message: string }>(`/devices/${id}`, {
+        method: 'DELETE',
+      }),
+    bulkImport: (devices: any[]) =>
+      request<{ message: string; importedCount: number; skippedCount: number; errors: string[] }>('/devices/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ devices }),
+      }),
   },
 
   users: {
@@ -123,6 +175,74 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    delete: (id: number) =>
+      request<{ message: string }>(`/users/${id}`, {
+        method: 'DELETE',
+      }),
+    bulkImport: (employees: any[]) =>
+      request<{ message: string; importedCount: number; skippedCount: number; errors: string[] }>('/users/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ employees }),
+      }),
+  },
+
+  feedback: {
+    create: (data: { reported_against_id?: number | null; category: string; severity?: string; subject: string; description: string; is_anonymous?: boolean }) =>
+      request<{ message: string; feedbackId: number }>('/feedback', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getAll: () =>
+      request<{ feedbacks: any[] }>('/feedback'),
+    update: (id: number, data: { status: string; hr_notes?: string }) =>
+      request<{ message: string }>(`/feedback/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+  },
+
+  chat: {
+    getConversations: () =>
+      request<{ conversations: any[]; generalChannel: any }>('/chat/conversations'),
+    getMessages: (targetId: number | string) =>
+      request<{ messages: any[] }>(`/chat/messages/${targetId}`),
+    sendMessage: (data: {
+      recipient_id?: number | null;
+      message_text?: string;
+      message_type?: string;
+      file_url?: string | null;
+      file_name?: string | null;
+      file_size?: number | null;
+      file_mime?: string | null;
+    }) =>
+      request<{ message: string; chatMessage: any }>('/chat/messages', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    uploadFile: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('desktop_support_token');
+      const res = await fetch(`${getApiBase()}/chat/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(err.error || 'File upload failed');
+      }
+      return res.json() as Promise<{
+        message: string;
+        fileUrl: string;
+        fileName: string;
+        fileSize: number;
+        mimeType: string;
+        messageType: string;
+      }>;
+    }
   },
 
   audit: {

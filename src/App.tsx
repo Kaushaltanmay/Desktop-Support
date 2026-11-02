@@ -15,6 +15,9 @@ import { ReportsView } from './components/ReportsView';
 import { UserProfileView } from './components/UserProfileView';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { LoginModal } from './components/LoginModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { MobileDrawer } from './components/MobileDrawer';
+import { ServerSettingsModal } from './components/ServerSettingsModal';
 
 // HRMS Components
 import { EmployeePunchCard } from './components/hrms/EmployeePunchCard';
@@ -25,6 +28,8 @@ import { HRAttendanceManagementView } from './components/hrms/HRAttendanceManage
 import { HRLeaveRequestsView } from './components/hrms/HRLeaveRequestsView';
 import { HolidaysView } from './components/hrms/HolidaysView';
 import { SchedulesView } from './components/hrms/SchedulesView';
+import { TeamFeedbackView } from './components/hrms/TeamFeedbackView';
+import { TeamChatView } from './components/chat/TeamChatView';
 
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
@@ -93,6 +98,8 @@ export function App() {
   // Modals & UI States
   const [selectedTicketId, setSelectedTicketId] = useState<string | number | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Filters for Ticket Management
@@ -192,41 +199,60 @@ export function App() {
     showToast('Signed out successfully.', 'info');
   };
 
+  // Safety RBAC Guard: Ensure IT Engineer is strictly locked to Employee self-service in HRMS
+  useEffect(() => {
+    if (activeApp === 'HRMS' && currentUser?.role === 'IT_ENGINEER' && portalMode !== 'EMPLOYEE') {
+      setPortalMode('EMPLOYEE');
+      setCurrentTab('hrms-dashboard');
+    }
+  }, [activeApp, currentUser, portalMode]);
+
   // Switch between Application Suites (IT Support <-> HRMS)
   const handleSwitchApp = (app: 'IT_SUPPORT' | 'HRMS') => {
     setActiveApp(app);
     if (app === 'HRMS') {
       setCurrentTab('hrms-dashboard');
-      if (currentUser?.role === 'HR') setPortalMode('HR');
-      else if (currentUser?.role === 'ADMIN') setPortalMode('HR');
-      else setPortalMode('EMPLOYEE');
-    } else {
-      if (currentUser?.role === 'EMPLOYEE') {
-        setPortalMode('EMPLOYEE');
-        setCurrentTab('emp-dashboard');
+      // STRICT RBAC: Only HR and Admin get HR management mode; IT Engineers and staff are locked to Employee mode!
+      if (currentUser?.role === 'HR' || currentUser?.role === 'ADMIN') {
+        setPortalMode('HR');
       } else {
+        setPortalMode('EMPLOYEE');
+      }
+    } else {
+      // In IT Support: IT Engineers and Admins get IT Ops mode; others get Employee ticket desk
+      if (currentUser?.role === 'IT_ENGINEER' || currentUser?.role === 'ADMIN') {
         setPortalMode('ENGINEER');
         setCurrentTab('dashboard');
+      } else {
+        setPortalMode('EMPLOYEE');
+        setCurrentTab('emp-dashboard');
       }
     }
     showToast(`Switched to ${app === 'HRMS' ? 'HRMS & Attendance Portal' : 'Desktop IT Support Desk'}.`, 'info');
   };
 
-  // Switch between Staff view and Employee view
-  const canSwitchPortal = currentUser?.role === 'IT_ENGINEER' || currentUser?.role === 'ADMIN' || currentUser?.role === 'HR';
+  // Switch between Staff view and Employee view:
+  // In IT Support: ONLY IT_ENGINEER or ADMIN can toggle views.
+  // In HRMS: ONLY HR or ADMIN can toggle views. An IT_ENGINEER in HRMS is strictly locked to Employee mode!
+  const canSwitchPortal = activeApp === 'IT_SUPPORT'
+    ? (currentUser?.role === 'IT_ENGINEER' || currentUser?.role === 'ADMIN')
+    : (currentUser?.role === 'HR' || currentUser?.role === 'ADMIN');
 
   const handleTogglePortal = () => {
     if (!canSwitchPortal) return;
 
-    if (portalMode === 'EMPLOYEE') {
-      const nextMode = activeApp === 'HRMS' ? 'HR' : 'ENGINEER';
+    if (activeApp === 'HRMS') {
+      if (currentUser?.role !== 'HR' && currentUser?.role !== 'ADMIN') return;
+      const nextMode = portalMode === 'HR' ? 'EMPLOYEE' : 'HR';
       setPortalMode(nextMode);
-      setCurrentTab(activeApp === 'HRMS' ? 'hrms-dashboard' : 'dashboard');
-      showToast(`Switched view to ${nextMode} mode.`, 'info');
+      setCurrentTab('hrms-dashboard');
+      showToast(`Switched view to ${nextMode === 'HR' ? 'HR Management' : 'Employee self-service'} mode.`, 'info');
     } else {
-      setPortalMode('EMPLOYEE');
-      setCurrentTab(activeApp === 'HRMS' ? 'hrms-dashboard' : 'emp-dashboard');
-      showToast(`Switched view to Employee self-service mode.`, 'info');
+      if (currentUser?.role !== 'IT_ENGINEER' && currentUser?.role !== 'ADMIN') return;
+      const nextMode = portalMode === 'ENGINEER' ? 'EMPLOYEE' : 'ENGINEER';
+      setPortalMode(nextMode);
+      setCurrentTab(nextMode === 'ENGINEER' ? 'dashboard' : 'emp-dashboard');
+      showToast(`Switched view to ${nextMode === 'ENGINEER' ? 'IT Ops' : 'Employee self-service'} mode.`, 'info');
     }
   };
 
@@ -310,7 +336,14 @@ export function App() {
       />
 
       {/* Main Right Viewport */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', overflowY: 'auto' }}>
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        height: '100vh',
+        overflow: currentTab === 'chat' ? 'hidden' : 'auto'
+      }}>
         {/* Top Header */}
         <Header
           currentUser={currentUser}
@@ -322,18 +355,41 @@ export function App() {
           canSwitchPortal={canSwitchPortal}
           activeApp={activeApp}
           onSwitchApp={handleSwitchApp}
+          onOpenMenu={() => setIsMobileMenuOpen(true)}
+          onOpenServerSettings={() => setIsServerSettingsOpen(true)}
+          onNavigateToChat={() => setCurrentTab('chat')}
         />
 
         {/* Dynamic Content Canvas */}
-        <main style={{ flex: 1, padding: '24px 28px' }}>
+        <main
+          className="app-main-content"
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            padding: currentTab === 'chat' ? '12px 18px 14px 18px' : '24px 28px',
+            overflow: currentTab === 'chat' ? 'hidden' : 'visible'
+          }}
+        >
           
-          {/* ============================================================== */}
-          {/* APPLICATION SUITE 1: DESKTOP IT SUPPORT                       */}
-          {/* ============================================================== */}
-          {activeApp === 'IT_SUPPORT' && (
+          {/* Universal Team Chat & Media Collaboration (WhatsApp style with Live Calls & Screen Sharing) */}
+          {currentTab === 'chat' && (
+            <TeamChatView
+              currentUser={currentUser}
+              showToast={showToast}
+            />
+          )}
+
+          {currentTab !== 'chat' && (
             <>
-              {/* IT Engineer & Admin Views */}
-              {(portalMode === 'ENGINEER' || portalMode === 'HR') && (
+              {/* ============================================================== */}
+              {/* APPLICATION SUITE 1: DESKTOP IT SUPPORT                       */}
+              {/* ============================================================== */}
+              {activeApp === 'IT_SUPPORT' && (
+            <>
+              {/* IT Engineer & Admin Views: Strictly accessible only by users with IT_ENGINEER or ADMIN role */}
+              {((portalMode === 'ENGINEER') && (currentUser?.role === 'IT_ENGINEER' || currentUser?.role === 'ADMIN')) && (
                 <>
                   {currentTab === 'dashboard' && (
                     <EngineerDashboard
@@ -379,6 +435,7 @@ export function App() {
                       devices={devices}
                       users={users}
                       departments={departments}
+                      currentUser={currentUser}
                       onRefresh={refreshAllData}
                     />
                   )}
@@ -464,8 +521,8 @@ export function App() {
           {/* ============================================================== */}
           {activeApp === 'HRMS' && (
             <>
-              {/* HR / Admin Views */}
-              {(portalMode === 'HR' || portalMode === 'ENGINEER') && (
+              {/* HR / Admin Views: Strictly accessible only by users with HR or ADMIN role */}
+              {((portalMode === 'HR') && (currentUser?.role === 'HR' || currentUser?.role === 'ADMIN')) && (
                 <>
                   {currentTab === 'hrms-dashboard' && (
                     <HRDashboardView
@@ -511,6 +568,14 @@ export function App() {
                     <HolidaysView currentUser={currentUser} showToast={showToast} />
                   )}
 
+                  {currentTab === 'hrms-feedback' && (
+                    <TeamFeedbackView
+                      currentUser={currentUser}
+                      users={users}
+                      showToast={showToast}
+                    />
+                  )}
+
                   {currentTab === 'audit' && (
                     <AuditLogsView auditLogs={auditLogs} />
                   )}
@@ -547,6 +612,14 @@ export function App() {
                     <HolidaysView currentUser={currentUser} showToast={showToast} />
                   )}
 
+                  {currentTab === 'hrms-feedback' && (
+                    <TeamFeedbackView
+                      currentUser={currentUser}
+                      users={users}
+                      showToast={showToast}
+                    />
+                  )}
+
                   {currentTab === 'emp-profile' && (
                     <UserProfileView
                       currentUser={currentUser}
@@ -562,7 +635,11 @@ export function App() {
                   )}
                 </>
               )}
+              {/* end activeApp HRMS */}
             </>
+          )}
+          {/* end currentTab !== 'chat' */}
+          </>
           )}
         </main>
       </div>
@@ -598,6 +675,56 @@ export function App() {
         onSelectTicket={(ticketId) => {
           setIsNotificationsOpen(false);
           setSelectedTicketId(ticketId);
+        }}
+      />
+
+      {/* Mobile Bottom Navigation Bar (Phone Screen / Touch Navigation) */}
+      <MobileBottomNav
+        currentTab={currentTab}
+        onSelectTab={(tab) => {
+          if (tab === 'notifications') {
+            setIsNotificationsOpen(true);
+          } else {
+            setCurrentTab(tab);
+          }
+        }}
+        onOpenMenu={() => setIsMobileMenuOpen(true)}
+        activeApp={activeApp}
+        portalMode={portalMode}
+        ticketCount={activeTicketCount}
+      />
+
+      {/* Mobile Sliding Drawer Menu */}
+      <MobileDrawer
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        currentTab={currentTab}
+        onSelectTab={(tab) => {
+          if (tab === 'notifications') {
+            setIsNotificationsOpen(true);
+          } else {
+            setCurrentTab(tab);
+          }
+        }}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        activeApp={activeApp}
+        onSwitchApp={handleSwitchApp}
+        portalMode={portalMode}
+        onTogglePortal={handleTogglePortal}
+        canSwitchPortal={canSwitchPortal}
+        onOpenServerSettings={() => setIsServerSettingsOpen(true)}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
+        unreadCount={unreadNotificationsCount}
+      />
+
+      {/* Mobile & Network API Server Connection Settings Modal */}
+      <ServerSettingsModal
+        isOpen={isServerSettingsOpen}
+        onClose={() => setIsServerSettingsOpen(false)}
+        onServerChanged={() => {
+          refreshAllData();
+          showToast('Server connection updated.');
         }}
       />
     </div>

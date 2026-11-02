@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import { api } from '../../services/api';
 import { 
   LogIn, 
@@ -11,7 +13,8 @@ import {
   ShieldAlert, 
   Sparkles,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Smartphone
 } from 'lucide-react';
 
 interface EmployeePunchCardProps {
@@ -80,9 +83,33 @@ export const EmployeePunchCard: React.FC<EmployeePunchCardProps> = ({
       };
     }
 
+    // Check if running on native mobile device via Capacitor
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const permStatus = await Geolocation.checkPermissions();
+        if (permStatus.location !== 'granted') {
+          const reqStatus = await Geolocation.requestPermissions();
+          if (reqStatus.location !== 'granted') {
+            throw new Error('Location permission is required for mobile geofence punch-in.');
+          }
+        }
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+        });
+        return {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy || 10.0
+        };
+      } catch (nativeErr: any) {
+        console.warn('Native geolocation failed, falling back to browser API:', nativeErr);
+      }
+    }
+
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported by your browser.'));
+        reject(new Error('Geolocation is not supported by your device browser.'));
         return;
       }
 
@@ -96,7 +123,7 @@ export const EmployeePunchCard: React.FC<EmployeePunchCardProps> = ({
         },
         (err) => {
           let msg = 'Failed to obtain GPS coordinates.';
-          if (err.code === 1) msg = 'Location permission was denied. Please allow location access in your browser.';
+          if (err.code === 1) msg = 'Location permission was denied. Please allow location access in your device settings.';
           else if (err.code === 2) msg = 'Location unavailable. Please verify GPS settings.';
           else if (err.code === 3) msg = 'Location request timed out. Please try again.';
           reject(new Error(msg));

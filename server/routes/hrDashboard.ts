@@ -5,8 +5,8 @@ import { formatMinutes } from '../utils/attendanceCalc';
 
 const router = Router();
 
-// GET /api/hr/dashboard
-router.get('/dashboard', authenticateToken, requireRole(['HR', 'ADMIN', 'IT_ENGINEER']), (req: AuthenticatedRequest, res: Response) => {
+// GET /api/hr/dashboard (Restricted strictly to HR and Admin)
+router.get('/dashboard', authenticateToken, requireRole(['HR', 'ADMIN']), (req: AuthenticatedRequest, res: Response) => {
   const today = new Date().toISOString().split('T')[0];
 
   // 1. Total Employees

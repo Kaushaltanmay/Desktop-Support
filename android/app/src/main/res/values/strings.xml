@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fly Media IT &amp; HRMS</string>
+    <string name="title_activity_main">Fly Media IT &amp; HRMS</string>
+    <string name="package_name">com.flymedia.desktopsupport</string>
+    <string name="custom_url_scheme">com.flymedia.desktopsupport</string>
+</resources>

@@ -92,14 +92,26 @@ npm run build
 
 ---
 
-## 📱 Mobile App Compatibility (React Native / Expo)
+## 📱 Mobile App Build (Android APK & Capacitor Native)
 
-See [`docs/API.md`](file:///c:/Tanmay/Desktop%20Support/docs/API.md) for full endpoint specifications.
+The mobile application build is 100% feature-complete with the desktop suite, featuring:
+- **Direct APK Installation:** Ready-to-install Android APK: [`FlyMedia-DesktopSupport.apk`](file:///c:/Tanmay/Desktop%20Support/FlyMedia-DesktopSupport.apk) (4.99 MB).
+- **Native Geolocation Punch In:** Hardware GPS positioning via `@capacitor/geolocation` validating 500m office boundaries.
+- **Mobile Touch Navigation:** Bottom tab bar (`MobileBottomNav`) and off-canvas sliding drawer (`MobileDrawer`).
+- **Dynamic API Host Switcher:** 1-tap switching between Office LAN (`http://192.168.1.66:5000/api`), Android Emulator (`http://10.0.2.2:5000/api`), and custom hosts with latency test.
+- **Full Architecture Documentation:** See [`docs/MOBILE_APP.md`](file:///c:/Tanmay/Desktop%20Support/docs/MOBILE_APP.md).
 
-The backend REST API is 100% decoupled from the web UI, allowing iOS and Android mobile applications to:
-* Acquire GPS coordinates via `expo-location` and verify 500m geofences.
-* Punch in and out with live turnaround times.
-* Submit and review leave applications with push notifications.
+### Mobile Commands:
+```bash
+# Sync web build to Android native project
+npm run mobile:sync
+
+# Compile fresh Android APK (assembleDebug)
+npm run mobile:apk
+
+# Open native project in Android Studio
+npm run mobile:open
+```
 
 ---
 

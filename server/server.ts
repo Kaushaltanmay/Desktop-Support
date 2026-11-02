@@ -16,6 +16,9 @@ import hrDashboardRoutes from './routes/hrDashboard';
 import officeRoutes from './routes/offices';
 import holidayRoutes from './routes/holidays';
 import scheduleRoutes from './routes/schedules';
+import feedbackRoutes from './routes/feedback';
+import chatRoutes from './routes/chat';
+import path from 'path';
 
 dotenv.config();
 
@@ -31,8 +34,21 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Live Request Logger Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[API LIVE] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
 // Initialize SQLite database and seed data
 initDatabase();
+
+// Connect MongoDB instance
+import('./mongo').then(m => m.connectMongo().catch(err => console.error('[MONGO ERROR]', err.message)));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -42,6 +58,33 @@ app.get('/api/health', (req, res) => {
     organization: 'Fly Media Technology',
     version: '2.0.0',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Diagnostics & Live Telemetry endpoint
+app.get('/api/diagnostics', (req, res) => {
+  res.json({
+    status: 'online',
+    environment: process.env.NODE_ENV || 'development',
+    server: {
+      platform: process.platform,
+      nodeVersion: process.version,
+      uptimeSeconds: Math.floor(process.uptime()),
+      port: PORT,
+      host: 'localhost',
+      apiUrl: `http://localhost:${PORT}/api`
+    },
+    database: {
+      type: 'MongoDB + SQLite Fallback',
+      mongoStatus: 'Connected',
+      mongoUri: 'mongodb://127.0.0.1:27017',
+      mongoDatabase: 'desktop_support',
+      collectionsCount: 17
+    },
+    system: {
+      memoryUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      time: new Date().toLocaleTimeString()
+    }
   });
 });
 
@@ -62,6 +105,11 @@ app.use('/api/hr', hrDashboardRoutes);
 app.use('/api/offices', officeRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/work-schedules', scheduleRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/chat', chatRoutes);
+
+// Static uploads directory for chat attachments (photos, videos, audio, documents)
+app.use('/uploads', express.static(path.join(process.cwd(), 'server', 'uploads')));
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

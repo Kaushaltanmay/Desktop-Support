@@ -16,7 +16,9 @@ import {
   Calendar,
   Clock,
   MapPin,
-  CheckCircle2
+  CheckCircle2,
+  MessageSquareWarning,
+  MessageCircle
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Navigation for IT Engineer
   const engineerNav = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+    { id: 'chat', label: 'Team Chat & Calls', icon: MessageCircle },
     { id: 'tickets', label: 'Task Board', icon: CheckSquare, badge: ticketCount },
     { id: 'employees', label: 'Team Directory', icon: Users },
     { id: 'departments', label: 'Departments', icon: Building2 },
@@ -53,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Navigation for IT Employee
   const itEmployeeNav = [
     { id: 'emp-dashboard', label: 'Dashboard', icon: LayoutGrid },
+    { id: 'chat', label: 'Team Chat & Calls', icon: MessageCircle },
     { id: 'emp-tickets', label: 'My Tickets', icon: CheckSquare, badge: ticketCount },
     { id: 'raise-ticket', label: 'Raise Ticket', icon: PlusCircle },
     { id: 'emp-profile', label: 'My Profile & PC', icon: User },
@@ -62,10 +66,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Navigation for HR Staff
   const hrNav = [
     { id: 'hrms-dashboard', label: 'HR Dashboard', icon: LayoutGrid },
+    { id: 'chat', label: 'Team Chat & Calls', icon: MessageCircle },
     { id: 'hrms-attendance', label: 'Attendance Triage', icon: CheckSquare },
     { id: 'hrms-leaves', label: 'Leave Requests', icon: Calendar },
     { id: 'employees', label: 'Employees Directory', icon: Users },
     { id: 'departments', label: 'Departments', icon: Building2 },
+    { id: 'hrms-feedback', label: 'Team Grievances & Feedback', icon: MessageSquareWarning },
     { id: 'hrms-schedules', label: 'Work Schedules', icon: Clock },
     { id: 'hrms-holidays', label: 'Company Holidays', icon: Calendar },
     { id: 'audit', label: 'HR Audit Trail', icon: FileText },
@@ -75,8 +81,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Navigation for HRMS Employee
   const hrmsEmployeeNav = [
     { id: 'hrms-dashboard', label: 'Today & Punch', icon: LayoutGrid },
+    { id: 'chat', label: 'Team Chat & Calls', icon: MessageCircle },
     { id: 'hrms-my-attendance', label: 'My Attendance', icon: CheckSquare },
     { id: 'hrms-leaves', label: 'Leave Entitlements', icon: Calendar },
+    { id: 'hrms-feedback', label: 'Report Grievance / Feedback', icon: MessageSquareWarning },
     { id: 'hrms-holidays', label: 'Holiday Calendar', icon: Calendar },
     { id: 'emp-profile', label: 'My Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -90,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <aside style={{
+    <aside className="sidebar-desktop" style={{
       width: '260px',
       background: '#ffffff',
       borderRight: '1px solid #e2e8f0',

@@ -9,7 +9,10 @@ import {
   User as UserIcon, 
   Laptop, 
   Shield,
-  Users
+  Users,
+  Menu,
+  Server,
+  MessageCircle
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -22,6 +25,9 @@ interface HeaderProps {
   canSwitchPortal: boolean;
   activeApp: 'IT_SUPPORT' | 'HRMS';
   onSwitchApp: (app: 'IT_SUPPORT' | 'HRMS') => void;
+  onOpenMenu?: () => void;
+  onOpenServerSettings?: () => void;
+  onNavigateToChat?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,7 +39,10 @@ export const Header: React.FC<HeaderProps> = ({
   onTogglePortal,
   canSwitchPortal,
   activeApp,
-  onSwitchApp
+  onSwitchApp,
+  onOpenMenu,
+  onOpenServerSettings,
+  onNavigateToChat
 }) => {
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -42,28 +51,49 @@ export const Header: React.FC<HeaderProps> = ({
   const displayName = currentUser?.name ? currentUser.name.toLowerCase().split(' ')[0] : 'user';
 
   return (
-    <header style={{
+    <header className="app-header" style={{
       height: '68px',
       background: '#ffffff',
       borderBottom: '1px solid #e2e8f0',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0 28px',
+      padding: '0 20px',
       position: 'sticky',
       top: 0,
       zIndex: 50
     }}>
-      {/* Left: Fly Media Technology Logo & Subtitle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      {/* Left: Hamburger (Mobile) + Fly Media Technology Logo & Subtitle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {onOpenMenu && (
+          <button
+            type="button"
+            className="mobile-hamburger-btn"
+            onClick={onOpenMenu}
+            aria-label="Open Navigation Menu"
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              padding: '7px',
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#334155'
+            }}
+          >
+            <Menu size={20} />
+          </button>
+        )}
+
         <img
           src="/flymedia_logo.png"
           alt="Fly Media Technology"
-          style={{ height: '36px', objectFit: 'contain' }}
+          style={{ height: '34px', objectFit: 'contain' }}
         />
-        <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="header-brand-text" style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>
-            {activeApp === 'IT_SUPPORT' ? 'Desktop IT Support' : 'HRMS & Attendance Portal'}
+            {activeApp === 'IT_SUPPORT' ? 'Desktop IT Support' : 'HRMS & Attendance'}
           </span>
           <span style={{
             fontSize: '0.65rem',
@@ -75,16 +105,16 @@ export const Header: React.FC<HeaderProps> = ({
             color: portalMode === 'ENGINEER' ? '#0284c7' : portalMode === 'HR' ? '#8b5cf6' : '#059669',
             border: `1px solid ${portalMode === 'ENGINEER' ? '#bae6fd' : portalMode === 'HR' ? '#ddd6fe' : '#a7f3d0'}`
           }}>
-            {portalMode === 'ENGINEER' ? 'IT Ops Portal' : portalMode === 'HR' ? 'HR Staff Desk' : 'Employee Portal'}
+            {portalMode === 'ENGINEER' ? 'IT Ops' : portalMode === 'HR' ? 'HR Desk' : 'Employee'}
           </span>
         </div>
       </div>
 
       {/* Right Controls: Exactly matching reference UI */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         
         {/* Unified Application Switcher: IT Support <-> HRMS */}
-        <div style={{
+        <div className="header-app-switcher" style={{
           display: 'flex',
           background: '#f1f5f9',
           padding: '3px',
@@ -97,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
+              padding: '6px 10px',
               borderRadius: '8px',
               fontSize: '0.78rem',
               fontWeight: 700,
@@ -108,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <Laptop size={14} />
-            <span>IT Support</span>
+            <span className="app-switcher-text">IT Support</span>
           </button>
 
           <button
@@ -117,7 +147,7 @@ export const Header: React.FC<HeaderProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
+              padding: '6px 10px',
               borderRadius: '8px',
               fontSize: '0.78rem',
               fontWeight: 700,
@@ -128,13 +158,14 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <Users size={14} />
-            <span>HR Portal</span>
+            <span className="app-switcher-text">HR Portal</span>
           </button>
         </div>
 
         {/* Portal Switcher (for Admins / Staff testing) */}
         {canSwitchPortal && (
           <button
+            className="desktop-only"
             onClick={onTogglePortal}
             title="Switch portal view"
             style={{
@@ -155,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Light Theme Pill */}
-        <div style={{
+        <div className="desktop-only" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
@@ -311,6 +342,29 @@ export const Header: React.FC<HeaderProps> = ({
             }} />
           )}
         </button>
+
+        {/* Team Chat & Calling Shortcut Button */}
+        {onNavigateToChat && (
+          <button
+            onClick={onNavigateToChat}
+            title="Open Live Team Chat, Media & Calls (WhatsApp-style Hub)"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#0284c7',
+              boxShadow: 'var(--shadow-card)',
+              cursor: 'pointer'
+            }}
+          >
+            <MessageCircle size={18} />
+          </button>
+        )}
       </div>
     </header>
   );

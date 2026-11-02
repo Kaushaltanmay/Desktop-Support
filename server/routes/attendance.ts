@@ -346,7 +346,7 @@ router.get('/me', authenticateToken, (req: AuthenticatedRequest, res: Response) 
 // -------------------------------------------------------------
 // GET /api/attendance (HR / Admin view all attendance)
 // -------------------------------------------------------------
-router.get('/', authenticateToken, requireRole(['HR', 'ADMIN', 'IT_ENGINEER']), (req: AuthenticatedRequest, res: Response) => {
+router.get('/', authenticateToken, requireRole(['HR', 'ADMIN']), (req: AuthenticatedRequest, res: Response) => {
   const { date, employee_id, department_id, status, search } = req.query;
 
   let query = `
