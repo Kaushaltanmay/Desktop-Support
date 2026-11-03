@@ -168,11 +168,21 @@ export const api = {
   users: {
     getAll: (params: Record<string, string> = {}) => {
       const qs = new URLSearchParams(params).toString();
-      return request<{ users: any[]; departments: any[] }>(`/users${qs ? `?${qs}` : ''}`);
+      return request<{ users: any[]; departments: any[]; roles?: any[] }>(`/users${qs ? `?${qs}` : ''}`);
     },
     create: (data: any) =>
-      request<{ message: string; user: any }>('/users', {
+      request<{ message: string; user: any; credentials?: any }>('/users', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: number, data: any) =>
+      request<{ message: string; user: any }>(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    resetPassword: (id: number, data: { newPassword: string }) =>
+      request<{ message: string; username?: string; email?: string; newPassword?: string }>(`/users/${id}/password`, {
+        method: 'PUT',
         body: JSON.stringify(data),
       }),
     delete: (id: number) =>
@@ -180,10 +190,12 @@ export const api = {
         method: 'DELETE',
       }),
     bulkImport: (employees: any[]) =>
-      request<{ message: string; importedCount: number; skippedCount: number; errors: string[] }>('/users/bulk', {
+      request<{ message: string; importedCount: number; skippedCount: number; credentials?: any[]; errors: string[] }>('/users/bulk', {
         method: 'POST',
         body: JSON.stringify({ employees }),
       }),
+    getRoles: () =>
+      request<{ roles: any[] }>('/users/roles'),
   },
 
   feedback: {

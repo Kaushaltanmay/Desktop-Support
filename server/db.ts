@@ -293,6 +293,56 @@ function migrateUsersTableIfNeeded() {
     console.error('Audit logs migration error:', err);
   }
 
+  // Ensure username column exists in users table
+  try {
+    const userColumns = db.prepare("PRAGMA table_info(users)").all() as any[];
+    const hasUsername = userColumns.some(c => c.name === 'username');
+    if (!hasUsername) {
+      console.log('[DATABASE] Adding username column to users table...');
+      db.exec("ALTER TABLE users ADD COLUMN username TEXT;");
+      db.exec("UPDATE users SET username = LOWER(REPLACE(email, '@flymedia.com', '')) WHERE username IS NULL OR username = '';");
+    }
+  } catch (err) {
+    console.error('Users table username migration error:', err);
+  }
+
+  // Ensure company_roles table exists and has initial enterprise roles
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS company_roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        portal_access TEXT DEFAULT 'EMPLOYEE',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    const roleCount = (db.prepare("SELECT COUNT(*) as count FROM company_roles").get() as any)?.count || 0;
+    if (roleCount === 0) {
+      const insertRole = db.prepare("INSERT OR IGNORE INTO company_roles (name, portal_access) VALUES (?, ?)");
+      const defaultRoles = [
+        { name: 'Employee', access: 'EMPLOYEE' },
+        { name: 'IT Engineer', access: 'IT_ENGINEER' },
+        { name: 'HR Specialist', access: 'HR' },
+        { name: 'System Administrator', access: 'ADMIN' },
+        { name: 'Frontend Developer', access: 'EMPLOYEE' },
+        { name: 'Backend Developer', access: 'EMPLOYEE' },
+        { name: 'Full Stack Engineer', access: 'EMPLOYEE' },
+        { name: 'UI/UX Designer', access: 'EMPLOYEE' },
+        { name: 'Digital Marketing Specialist', access: 'EMPLOYEE' },
+        { name: 'SEO Analyst', access: 'EMPLOYEE' },
+        { name: 'Content Writer', access: 'EMPLOYEE' },
+        { name: 'QA Engineer', access: 'EMPLOYEE' },
+        { name: 'Product Manager', access: 'EMPLOYEE' },
+        { name: 'Team Lead', access: 'EMPLOYEE' }
+      ];
+      for (const r of defaultRoles) {
+        insertRole.run(r.name, r.access);
+      }
+    }
+  } catch (err) {
+    console.error('Company roles migration error:', err);
+  }
+
   const tableCheck = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as any;
   if (!tableCheck) {
     // Fresh users table

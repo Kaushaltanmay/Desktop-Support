@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { db } from '../db';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { ensureDepartment } from './users';
 
 const router = Router();
 
@@ -174,7 +175,10 @@ router.post('/bulk', authenticateToken, requireRole(['IT_ENGINEER', 'ADMIN']), (
     let deptId = dev.department_id ? Number(dev.department_id) : null;
     if (!deptId && dev.department) {
       const dKey = String(dev.department).toLowerCase().trim();
-      deptId = deptMap[dKey] || null;
+      deptId = deptMap[dKey] || ensureDepartment(dev.department);
+      if (deptId) {
+        deptMap[dKey] = deptId;
+      }
     }
 
     let empId = dev.employee_id ? Number(dev.employee_id) : null;

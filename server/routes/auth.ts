@@ -7,12 +7,13 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'desktop_it_support_jwt_secret_token_2026_flymedia';
 
-// POST /api/auth/login
+// POST /api/auth/login (Login via Work Email, Username, or Employee ID)
 router.post('/login', (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, username, loginId } = req.body;
+  const identifier = (email || username || loginId || '').toLowerCase().trim();
 
-  if (!email || !password) {
-    res.status(400).json({ error: 'Email and password are required.' });
+  if (!identifier || !password) {
+    res.status(400).json({ error: 'Username/Email and password are required.' });
     return;
   }
 
@@ -20,17 +21,17 @@ router.post('/login', (req: Request, res: Response) => {
     SELECT u.*, d.name as department_name 
     FROM users u 
     LEFT JOIN departments d ON u.department_id = d.id 
-    WHERE u.email = ? AND u.is_active = 1
-  `).get(email.toLowerCase().trim()) as any;
+    WHERE (LOWER(u.email) = ? OR LOWER(COALESCE(u.username, '')) = ? OR LOWER(COALESCE(u.employee_id, '')) = ?) AND u.is_active = 1
+  `).get(identifier, identifier, identifier) as any;
 
   if (!user) {
-    res.status(401).json({ error: 'Invalid email or password.' });
+    res.status(401).json({ error: 'Invalid username/email or password.' });
     return;
   }
 
   const isValidPassword = bcrypt.compareSync(password, user.password_hash);
   if (!isValidPassword) {
-    res.status(401).json({ error: 'Invalid email or password.' });
+    res.status(401).json({ error: 'Invalid username/email or password.' });
     return;
   }
 
@@ -40,6 +41,7 @@ router.post('/login', (req: Request, res: Response) => {
       id: user.id,
       email: user.email,
       name: user.name,
+      username: user.username,
       role: user.role,
       department_id: user.department_id,
       employee_id: user.employee_id
@@ -65,7 +67,7 @@ router.get('/me', authenticateToken, (req: AuthenticatedRequest, res: Response) 
   }
 
   const user = db.prepare(`
-    SELECT u.id, u.name, u.email, u.role, u.department_id, u.employee_id, u.phone, u.created_at,
+    SELECT u.id, u.name, u.username, u.email, u.role, u.designation, u.department_id, u.employee_id, u.phone, u.created_at,
            d.name as department_name,
            dev.id as device_id, dev.asset_tag, dev.device_name, dev.model, dev.cpu, dev.ram, dev.storage, dev.operating_system
     FROM users u

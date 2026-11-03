@@ -17,7 +17,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
     const targetPassword = loginPass || password;
 
     if (!targetEmail || !targetPassword) {
-      setError('Please provide email and password.');
+      setError('Please provide your username/email and password.');
       return;
     }
 
@@ -134,12 +134,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-              Work Email Address
+              Work Email, Username or Employee ID
             </label>
             <input
               id="login-email"
-              type="email"
-              placeholder="e.g. tanmay@flymedia.com"
+              type="text"
+              placeholder="e.g. tanmay, EMP-101 or tanmay@flymedia.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={{ width: '100%' }}
