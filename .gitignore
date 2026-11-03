@@ -33,13 +33,14 @@ dist-ssr
 *.db
 *.db-shm
 *.db-wal
+!server/desktop_support.db
+!server/mongo_seed.json
 
 # Uploaded media & documents
 server/uploads/*
 !server/uploads/.gitkeep
 !server/uploads/chat/
-server/uploads/chat/*
-!server/uploads/chat/.gitkeep
+!server/uploads/chat/*
 
 # Built mobile APK binaries
 *.apk
