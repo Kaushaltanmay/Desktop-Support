@@ -45,12 +45,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
       bg: '#e0f2fe'
     },
     {
-      role: 'Employee (Digital Marketing)',
-      name: 'Sarvesh Kumar (SN33)',
-      email: 'sarvesh@flymedia.com',
-      icon: User,
-      color: '#8b5cf6',
-      bg: '#faf5ff'
+      role: 'HR Lead (Operations)',
+      name: 'Simran Kaur',
+      email: 'hr@flymedia.com',
+      icon: Users,
+      color: '#ec4899',
+      bg: '#fdf2f8'
     },
     {
       role: 'Employee (Web Development)',
@@ -59,14 +59,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
       icon: User,
       color: '#10b981',
       bg: '#ecfdf5'
-    },
-    {
-      role: 'HR Lead (Operations)',
-      name: 'Simran Kaur',
-      email: 'hr@flymedia.com',
-      icon: Users,
-      color: '#ec4899',
-      bg: '#fdf2f8'
     },
     {
       role: 'System Administrator',

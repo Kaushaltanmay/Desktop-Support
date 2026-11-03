@@ -423,20 +423,17 @@ function seedData() {
   ];
   depts.forEach(d => insertDept.run(d));
 
-  // 2. Users with hashed passwords
+  // 2. Users with hashed passwords (Clean Core Team: 1 Admin, 1 IT Engineer, 1 HR, 1 Employee)
   const passwordHash = bcrypt.hashSync('Password@123', 10);
   const insertUser = db.prepare(`
-    INSERT INTO users (name, email, password_hash, role, department_id, employee_id, phone, designation, joining_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (name, username, email, password_hash, role, department_id, employee_id, phone, designation, joining_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  insertUser.run('System Administrator', 'admin@flymedia.com', passwordHash, 'ADMIN', 5, 'ADM-001', '+91 98765 00001', 'Chief Systems Architect', '2024-01-10');
-  insertUser.run('Tanmay Kaushal', 'tanmay@flymedia.com', passwordHash, 'IT_ENGINEER', 5, 'ENG-001', '+91 98765 00002', 'Lead Desktop Support Engineer', '2024-03-15');
-  insertUser.run('Jordan Lee', 'jordan@flymedia.com', passwordHash, 'IT_ENGINEER', 5, 'ENG-002', '+91 98765 00003', 'Systems Administrator L2', '2024-06-01');
-  insertUser.run('Sarvesh Kumar', 'sarvesh@flymedia.com', passwordHash, 'EMPLOYEE', 2, 'EMP-101', '+91 98765 00101', 'Sr. Performance Marketer', '2024-02-01');
-  insertUser.run('Manmohan Singh', 'manmohan@flymedia.com', passwordHash, 'EMPLOYEE', 1, 'EMP-102', '+91 98765 00102', 'Full Stack Developer', '2024-04-12');
-  insertUser.run('Priya Patel', 'priya@flymedia.com', passwordHash, 'EMPLOYEE', 3, 'EMP-103', '+91 98765 00103', 'Lead UI/UX Designer', '2024-05-18');
-  insertUser.run('Rahul Sharma', 'rahul@flymedia.com', passwordHash, 'EMPLOYEE', 4, 'EMP-104', '+91 98765 00104', 'Content & SEO Specialist', '2024-07-20');
+  insertUser.run('System Administrator', 'admin', 'admin@flymedia.com', passwordHash, 'ADMIN', 5, 'ADM-001', '+91 98765 00001', 'Chief Systems Architect', '2024-01-10');
+  insertUser.run('Tanmay Kaushal', 'tanmay', 'tanmay@flymedia.com', passwordHash, 'IT_ENGINEER', 5, 'ENG-001', '+91 98765 00002', 'Lead Desktop Support Engineer', '2024-03-15');
+  insertUser.run('Simran Kaur', 'hr', 'hr@flymedia.com', passwordHash, 'HR', 6, 'HR-001', '+91 98765 00003', 'Lead HR Business Partner', '2024-02-01');
+  insertUser.run('Manmohan Singh', 'manmohan', 'manmohan@flymedia.com', passwordHash, 'EMPLOYEE', 1, 'EMP-102', '+91 98765 00102', 'Full Stack Developer', '2024-04-12');
 
   // 3. Systems / Devices (Matching reference: 38 Total Systems, 25 Active assignments)
   const insertDevice = db.prepare(`
