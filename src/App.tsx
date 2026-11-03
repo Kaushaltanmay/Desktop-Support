@@ -207,6 +207,68 @@ export function App() {
     }
   }, [activeApp, currentUser, portalMode]);
 
+  // Virtual Keyboard & Form Focus Auto-Scroll (Responsive Input Tracking)
+  useEffect(() => {
+    // 1. Web & Mobile Focusin listener (Ensures focused input rolls into center view above keyboard)
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+        document.body.classList.add('keyboard-visible');
+        setTimeout(() => {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }, 280);
+      }
+    };
+
+    const handleFocusOut = () => {
+      setTimeout(() => {
+        const active = document.activeElement;
+        if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT')) {
+          document.body.classList.remove('keyboard-visible');
+        }
+      }, 150);
+    };
+
+    window.addEventListener('focusin', handleFocusIn);
+    window.addEventListener('focusout', handleFocusOut);
+
+    // 2. Capacitor Native Keyboard Plugin listeners (for Android app)
+    let removeShow: any = null;
+    let removeDidShow: any = null;
+    let removeHide: any = null;
+
+    import('@capacitor/keyboard').then(({ Keyboard }) => {
+      Keyboard.addListener('keyboardWillShow', () => {
+        document.body.classList.add('keyboard-visible');
+        const active = document.activeElement as HTMLElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+          setTimeout(() => {
+            active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          }, 100);
+        }
+      }).then(handle => { removeShow = handle; }).catch(() => {});
+
+      Keyboard.addListener('keyboardDidShow', () => {
+        const active = document.activeElement as HTMLElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+          active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+      }).then(handle => { removeDidShow = handle; }).catch(() => {});
+
+      Keyboard.addListener('keyboardWillHide', () => {
+        document.body.classList.remove('keyboard-visible');
+      }).then(handle => { removeHide = handle; }).catch(() => {});
+    }).catch(() => {});
+
+    return () => {
+      window.removeEventListener('focusin', handleFocusIn);
+      window.removeEventListener('focusout', handleFocusOut);
+      if (removeShow?.remove) removeShow.remove();
+      if (removeDidShow?.remove) removeDidShow.remove();
+      if (removeHide?.remove) removeHide.remove();
+    };
+  }, []);
+
   // Switch between Application Suites (IT Support <-> HRMS)
   const handleSwitchApp = (app: 'IT_SUPPORT' | 'HRMS') => {
     setActiveApp(app);
@@ -341,7 +403,8 @@ export function App() {
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0,
-        height: '100vh',
+        height: '100dvh',
+        maxHeight: '100dvh',
         overflow: currentTab === 'chat' ? 'hidden' : 'auto'
       }}>
         {/* Top Header */}

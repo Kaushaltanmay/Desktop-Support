@@ -297,6 +297,20 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
+/* Form Input & Keyboard Responsiveness */
+input, textarea, select {
+  scroll-margin-bottom: 160px;
+  scroll-margin-top: 80px;
+}
+
+body.keyboard-visible .mobile-bottom-nav {
+  display: none !important;
+}
+
+body.keyboard-visible .app-main-content {
+  padding-bottom: 360px !important;
+}
+
 @media (max-width: 480px) {
   .grid-responsive-stats {
     grid-template-columns: 1fr !important;

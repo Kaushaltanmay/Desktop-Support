@@ -162,7 +162,9 @@ router.get('/', authenticateToken, requireRole(['IT_ENGINEER', 'ADMIN', 'HR']), 
   let query = `
     SELECT u.id, u.name, u.username, u.email, u.role, u.department_id, u.employee_id, u.phone, u.designation, u.is_active, u.created_at,
            d.name as department_name,
-           dev.id as device_id, dev.asset_tag, dev.device_name
+           GROUP_CONCAT(dev.asset_tag, ', ') as asset_tag,
+           GROUP_CONCAT(dev.device_name, ', ') as device_name,
+           MIN(dev.id) as device_id
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
     LEFT JOIN devices dev ON dev.employee_id = u.id
@@ -186,7 +188,7 @@ router.get('/', authenticateToken, requireRole(['IT_ENGINEER', 'ADMIN', 'HR']), 
     params.push(p, p, p, p);
   }
 
-  query += ` ORDER BY u.id ASC`;
+  query += ` GROUP BY u.id ORDER BY u.id ASC`;
 
   const users = db.prepare(query).all(...params);
   const departments = db.prepare("SELECT * FROM departments ORDER BY name ASC").all();

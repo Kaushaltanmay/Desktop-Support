@@ -97,7 +97,10 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
 
   const canManageEmployees = currentUser?.role === 'ADMIN' || currentUser?.role === 'HR';
 
-  const filteredUsers = users.filter(u =>
+  // Ensure strict uniqueness by user id
+  const uniqueUsers = Array.from(new Map(users.map(u => [u.id, u])).values());
+
+  const filteredUsers = uniqueUsers.filter(u =>
     u.name?.toLowerCase().includes(search.toLowerCase()) ||
     u.email?.toLowerCase().includes(search.toLowerCase()) ||
     (u.username && u.username.toLowerCase().includes(search.toLowerCase())) ||
