@@ -209,14 +209,28 @@ export function App() {
 
   // Virtual Keyboard & Form Focus Auto-Scroll (Responsive Input Tracking)
   useEffect(() => {
-    // 1. Web & Mobile Focusin listener (Ensures focused input rolls into center view above keyboard)
+    // 1. Web & Mobile Focusin listener (Ensures focused input rolls into center view for forms, but keeps chat pinned)
     const handleFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+      if (!target) return;
+
+      // In chat mode, do NOT center or scroll window! Smoothly pin message history to bottom above keyboard
+      if (target.closest('.team-chat-container') || target.dataset.chatInput) {
+        document.body.classList.add('keyboard-visible');
+        setTimeout(() => {
+          const chatScroll = document.querySelector('.chat-messages-container');
+          if (chatScroll) {
+            chatScroll.scrollTop = chatScroll.scrollHeight;
+          }
+        }, 120);
+        return;
+      }
+
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
         document.body.classList.add('keyboard-visible');
         setTimeout(() => {
           target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-        }, 280);
+        }, 220);
       }
     };
 
@@ -241,6 +255,15 @@ export function App() {
       Keyboard.addListener('keyboardWillShow', () => {
         document.body.classList.add('keyboard-visible');
         const active = document.activeElement as HTMLElement;
+        if (active && (active.closest('.team-chat-container') || active.dataset.chatInput)) {
+          setTimeout(() => {
+            const chatScroll = document.querySelector('.chat-messages-container');
+            if (chatScroll) {
+              chatScroll.scrollTop = chatScroll.scrollHeight;
+            }
+          }, 80);
+          return;
+        }
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
           setTimeout(() => {
             active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
@@ -250,6 +273,13 @@ export function App() {
 
       Keyboard.addListener('keyboardDidShow', () => {
         const active = document.activeElement as HTMLElement;
+        if (active && (active.closest('.team-chat-container') || active.dataset.chatInput)) {
+          const chatScroll = document.querySelector('.chat-messages-container');
+          if (chatScroll) {
+            chatScroll.scrollTop = chatScroll.scrollHeight;
+          }
+          return;
+        }
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
           active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
         }
@@ -425,13 +455,13 @@ export function App() {
 
         {/* Dynamic Content Canvas */}
         <main
-          className="app-main-content"
+          className={`app-main-content ${currentTab === 'chat' ? 'chat-active' : ''}`}
           style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
-            padding: currentTab === 'chat' ? '12px 18px 14px 18px' : '24px 28px',
+            padding: currentTab === 'chat' ? '0px' : '24px 28px',
             overflow: currentTab === 'chat' ? 'hidden' : 'visible'
           }}
         >

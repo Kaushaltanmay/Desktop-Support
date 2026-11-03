@@ -54,7 +54,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
+  const [selectedImageModal, setSelectedImageModal] = useState<{ url: string; name?: string; downloadUrl?: string } | null>(null);
 
   // Live Calling & Screen Sharing state
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
@@ -224,20 +224,30 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
   const getMediaUrl = (url: string) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
+    if (url.startsWith('/uploads')) {
+      return apiHost ? `${apiHost}${url}` : url;
+    }
     return `${apiHost}${url}`;
   };
 
+  const getDownloadUrl = (url: string, name?: string) => {
+    if (!url) return '';
+    const filename = url.split('/').pop() || '';
+    const base = getApiBase();
+    return `${base}/chat/download/${filename}?name=${encodeURIComponent(name || filename)}`;
+  };
+
   return (
-    <div className="animate-fade-in" style={{
+    <div className="team-chat-container animate-fade-in" style={{
       display: 'flex',
       flex: 1,
       height: '100%',
       minHeight: 0,
       background: '#ffffff',
-      borderRadius: '16px',
-      border: '1px solid #e2e8f0',
+      borderRadius: isMobileScreen ? '0px' : '16px',
+      border: isMobileScreen ? 'none' : '1px solid #e2e8f0',
       overflow: 'hidden',
-      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)'
+      boxShadow: isMobileScreen ? 'none' : '0 4px 20px rgba(0, 0, 0, 0.04)'
     }}>
       
       {/* ============================================================== */}
@@ -620,15 +630,18 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
             </div>
 
             {/* Messages Scrollable Area */}
-            <div style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              padding: '16px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
+            <div 
+              className="chat-messages-container"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}
+            >
               {messages.length === 0 ? (
                 <div style={{ margin: 'auto', textAlign: 'center', color: '#94a3b8' }}>
                   <Users size={36} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
@@ -676,22 +689,49 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
                         {/* 1. Image Preview */}
                         {isImage && (
                           <div style={{ marginBottom: '8px' }}>
-                            <img
-                              src={getMediaUrl(msg.file_url)}
-                              alt={msg.file_name || 'Photo attachment'}
-                              onClick={() => setSelectedImageModal(getMediaUrl(msg.file_url))}
-                              style={{
-                                maxWidth: '100%',
-                                maxHeight: '280px',
-                                borderRadius: '10px',
-                                objectFit: 'cover',
-                                cursor: 'pointer',
-                                display: 'block'
-                              }}
-                            />
-                            <span style={{ fontSize: '0.68rem', opacity: 0.8, display: 'block', marginTop: '3px' }}>
-                              {msg.file_name} ({formatFileSize(msg.file_size)})
-                            </span>
+                            <div style={{ position: 'relative' }}>
+                              <img
+                                src={getMediaUrl(msg.file_url)}
+                                alt={msg.file_name || 'Photo attachment'}
+                                onClick={() => setSelectedImageModal({
+                                  url: getMediaUrl(msg.file_url),
+                                  name: msg.file_name,
+                                  downloadUrl: getDownloadUrl(msg.file_url, msg.file_name)
+                                })}
+                                style={{
+                                  maxWidth: '100%',
+                                  maxHeight: '280px',
+                                  borderRadius: '10px',
+                                  objectFit: 'cover',
+                                  cursor: 'pointer',
+                                  display: 'block'
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', gap: '8px' }}>
+                              <span style={{ fontSize: '0.68rem', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {msg.file_name} ({formatFileSize(msg.file_size)})
+                              </span>
+                              <a
+                                href={getDownloadUrl(msg.file_url, msg.file_name)}
+                                download={msg.file_name || 'image'}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '0.68rem',
+                                  color: isOutgoing ? '#ffffff' : '#0284c7',
+                                  textDecoration: 'none',
+                                  fontWeight: 700,
+                                  opacity: 0.95
+                                }}
+                              >
+                                <Download size={12} />
+                                <span>Save</span>
+                              </a>
+                            </div>
                           </div>
                         )}
 
@@ -779,7 +819,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
                             </div>
 
                             <a
-                              href={getMediaUrl(msg.file_url)}
+                              href={getDownloadUrl(msg.file_url, msg.file_name)}
                               download={msg.file_name || 'download'}
                               target="_blank"
                               rel="noreferrer"
@@ -895,6 +935,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
 
                 {/* Text Input */}
                 <input
+                  data-chat-input="true"
                   type="text"
                   placeholder={uploading ? 'Uploading attachment...' : `Message ${activeContact.name}...`}
                   value={messageText}
@@ -949,44 +990,129 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
         )}
       </div>
 
-      {/* Image Lightbox Preview Modal */}
+      {/* Image Lightbox Preview Modal with High-Visibility Header and Close Cross */}
       {selectedImageModal && (
         <div
-          onClick={() => setSelectedImageModal(null)}
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.85)',
+            background: 'rgba(15, 23, 42, 0.95)',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 3000,
-            padding: '20px'
+            flexDirection: 'column',
+            zIndex: 9999,
+            backdropFilter: 'blur(10px)'
           }}
         >
-          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+          {/* Top Control Bar with Back to Chat, Download, and Prominent Red Close (X) button */}
+          <div style={{
+            height: '64px',
+            padding: '0 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(0, 0, 0, 0.55)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+            flexShrink: 0
+          }}>
             <button
               onClick={() => setSelectedImageModal(null)}
               style={{
-                position: 'absolute',
-                top: '-40px',
-                right: '0',
-                background: 'none',
-                border: 'none',
-                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.14)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                color: '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '20px',
+                fontSize: '0.85rem',
+                fontWeight: 600,
                 cursor: 'pointer'
               }}
             >
-              <X size={28} />
+              <ArrowLeft size={18} />
+              <span>Back to Chat</span>
             </button>
+
+            <span style={{
+              color: '#94a3b8',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              maxWidth: '40%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {selectedImageModal.name || 'Image Preview'}
+            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <a
+                href={selectedImageModal.downloadUrl || selectedImageModal.url}
+                download={selectedImageModal.name || 'image'}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#0284c7',
+                  color: '#ffffff',
+                  padding: '8px 14px',
+                  borderRadius: '20px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  textDecoration: 'none'
+                }}
+              >
+                <Download size={16} />
+                <span>Save</span>
+              </a>
+
+              <button
+                onClick={() => setSelectedImageModal(null)}
+                title="Close Image Preview (Esc)"
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)'
+                }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Image Container */}
+          <div
+            onClick={() => setSelectedImageModal(null)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+              overflow: 'hidden'
+            }}
+          >
             <img
-              src={selectedImageModal}
-              alt="Enlarged preview"
+              src={selectedImageModal.url}
+              alt={selectedImageModal.name || 'Enlarged preview'}
+              onClick={(e) => e.stopPropagation()}
               style={{
-                maxWidth: '90vw',
-                maxHeight: '85vh',
-                borderRadius: '8px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+                maxWidth: '96vw',
+                maxHeight: 'calc(100vh - 120px)',
+                objectFit: 'contain',
+                borderRadius: '10px',
+                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)'
               }}
             />
           </div>

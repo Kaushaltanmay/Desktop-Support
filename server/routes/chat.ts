@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -55,6 +55,20 @@ router.post('/upload', authenticateToken, upload.single('file'), (req: Authentic
     mimeType: mime,
     messageType
   });
+});
+
+// GET /api/chat/download/:filename (Direct attachment download with original filename)
+router.get('/download/:filename', (req: Request, res: Response) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(chatUploadsDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    res.status(404).send('File not found');
+    return;
+  }
+
+  const customName = req.query.name ? String(req.query.name) : filename;
+  res.download(filePath, customName);
 });
 
 // GET /api/chat/conversations (All team members + General Channel with last messages)

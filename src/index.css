@@ -277,8 +277,14 @@ input:focus, select:focus, textarea:focus {
     font-size: 0.72rem;
   }
 
-  .app-main-content {
+  .app-main-content:not(.chat-active) {
     padding: 16px 14px 84px 14px !important;
+  }
+
+  .app-main-content.chat-active {
+    padding: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
   }
 
   /* Grid adaptations for mobile viewports */
@@ -298,17 +304,13 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Form Input & Keyboard Responsiveness */
-input, textarea, select {
-  scroll-margin-bottom: 160px;
+input:not([data-chat-input]), textarea, select {
+  scroll-margin-bottom: 120px;
   scroll-margin-top: 80px;
 }
 
 body.keyboard-visible .mobile-bottom-nav {
   display: none !important;
-}
-
-body.keyboard-visible .app-main-content {
-  padding-bottom: 360px !important;
 }
 
 @media (max-width: 480px) {
