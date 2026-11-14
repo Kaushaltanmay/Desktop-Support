@@ -19,6 +19,7 @@ import scheduleRoutes from './routes/schedules';
 import feedbackRoutes from './routes/feedback';
 import chatRoutes from './routes/chat';
 import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -110,6 +111,18 @@ app.use('/api/chat', chatRoutes);
 
 // Static uploads directory for chat attachments (photos, videos, audio, documents)
 app.use('/uploads', express.static(path.join(process.cwd(), 'server', 'uploads')));
+
+// Serve built frontend if dist exists (enables hosting complete app from single port 5000)
+const distPath = path.join(process.cwd(), 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      return res.sendFile(path.join(distPath, 'index.html'));
+    }
+    next();
+  });
+}
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
