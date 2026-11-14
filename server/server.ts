@@ -35,14 +35,44 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Live Request Logger Middleware
+// Live Request Logger Middleware (with Real IP & Persistent Log File)
+const logFilePath = path.join(process.cwd(), 'server', 'server.log');
+
 app.use((req, res, next) => {
   const start = Date.now();
+  const rawIp = (req.headers['cf-connecting-ip'] as string) || 
+                (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || 
+                req.socket.remoteAddress || 
+                '127.0.0.1';
+  const cleanIp = rawIp.replace('::ffff:', '');
+
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`[API LIVE] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+    const isAuth = req.headers['authorization'] ? 'AUTH' : 'PUB ';
+    const timeStr = new Date().toLocaleTimeString();
+    const logLine = `[${timeStr}] [${cleanIp.padEnd(15)}] [${isAuth}] ${req.method.padEnd(6)} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`;
+    console.log(logLine);
+    try {
+      fs.appendFileSync(logFilePath, `[${new Date().toISOString()}] [${cleanIp}] [${isAuth}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)\n`);
+    } catch (_) {}
   });
   next();
+});
+
+// Endpoint to view recent server request logs
+app.get('/api/server-logs', (req, res) => {
+  try {
+    if (fs.existsSync(logFilePath)) {
+      const content = fs.readFileSync(logFilePath, 'utf8');
+      const lines = content.trim().split('\n').filter(Boolean);
+      const recent = lines.slice(-100).reverse();
+      res.json({ total: lines.length, recentLogs: recent });
+    } else {
+      res.json({ total: 0, recentLogs: [] });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Initialize SQLite database and seed data
