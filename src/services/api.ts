@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 
 export const DEFAULT_LAN_API = 'http://192.168.1.72:5000/api';
 export const DEFAULT_EMULATOR_API = 'http://10.0.2.2:5000/api';
+export const DEFAULT_TUNNEL_API = 'https://figure-normally-musicians-accessed.trycloudflare.com/api';
 
 export function getApiBase(): string {
   // 1. Check user-configured override in localStorage
@@ -17,6 +18,9 @@ export function getApiBase(): string {
 
   // 3. If running on native mobile device (Capacitor Android / iOS)
   if (Capacitor.isNativePlatform()) {
+    if (Capacitor.getPlatform() === 'ios') {
+      return DEFAULT_TUNNEL_API;
+    }
     return DEFAULT_EMULATOR_API;
   }
 

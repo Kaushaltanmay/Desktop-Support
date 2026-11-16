@@ -40,10 +40,10 @@ const logFilePath = path.join(process.cwd(), 'server', 'server.log');
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const rawIp = (req.headers['cf-connecting-ip'] as string) || 
-                (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || 
-                req.socket.remoteAddress || 
-                '127.0.0.1';
+  const rawIp = (req.headers['cf-connecting-ip'] as string) ||
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
+    req.socket.remoteAddress ||
+    '127.0.0.1';
   const cleanIp = rawIp.replace('::ffff:', '');
 
   res.on('finish', () => {
@@ -54,7 +54,7 @@ app.use((req, res, next) => {
     console.log(logLine);
     try {
       fs.appendFileSync(logFilePath, `[${new Date().toISOString()}] [${cleanIp}] [${isAuth}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)\n`);
-    } catch (_) {}
+    } catch (_) { }
   });
   next();
 });

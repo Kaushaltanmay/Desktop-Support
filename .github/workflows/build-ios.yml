@@ -1,0 +1,62 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS IPA Package
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm install
+
+      - name: Build Web Production Assets
+        run: npm run build
+
+      - name: Sync Capacitor iOS & CocoaPods
+        run: |
+          npx cap sync ios
+          cd ios/App
+          pod install
+
+      - name: Build Xcode Archive (Release)
+        run: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace \
+                     -scheme App \
+                     -configuration Release \
+                     -destination 'generic/platform=iOS' \
+                     -archivePath build/App.xcarchive \
+                     archive \
+                     CODE_SIGNING_ALLOWED=NO \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGN_IDENTITY="" \
+                     AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package Payload into .ipa
+        run: |
+          cd ios/App/build
+          mkdir -p Payload
+          cp -r App.xcarchive/Products/Applications/App.app Payload/
+          zip -r FlyMedia-DesktopSupport.ipa Payload
+          ls -lh FlyMedia-DesktopSupport.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlyMedia-DesktopSupport-iOS
+          path: ios/App/build/FlyMedia-DesktopSupport.ipa
+          retention-days: 14

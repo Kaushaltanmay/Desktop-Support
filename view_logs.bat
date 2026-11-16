@@ -10,3 +10,4 @@ if not exist "server\server.log" (
     echo.
 )
 powershell -NoExit -Command "Get-Content 'server\server.log' -Tail 30 -Wait"
+
