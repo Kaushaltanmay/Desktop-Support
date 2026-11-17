@@ -12,7 +12,8 @@
     "mobile:sync": "npm run build && npx cap sync android",
     "mobile:apk": "npm run build && npx cap sync android && cd android && gradlew.bat assembleDebug",
     "mobile:open": "npx cap open android",
-    "ios:sync": "npm run build && npx cap sync ios"
+    "ios:sync": "npm run build && npx cap sync ios",
+    "db:sql": "sqlite3 -header -column server/desktop_support.db"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",
