@@ -14,8 +14,8 @@
  *        SCL -> GPIO 22
  *        SDA -> GPIO 21
  *    - 5mm RGB LED (Common Anode - Longest leg to 3V3, 220 ohm on R/G/B):
- *        Red   -> GPIO 26
- *        Green -> GPIO 25
+ *        Red   -> GPIO 25
+ *        Green -> GPIO 26
  *        Blue  -> GPIO 33
  *    - Active Buzzer Module (3.3V-5V):
  *        VCC -> 3V3
@@ -71,8 +71,8 @@ const char* DEVICE_KEY    = "flymedia_esp32_key_2026";
 #define OLED_I2C_ADDR    0x3C
 
 // 5mm Common Anode RGB LED (LOW = ON, HIGH = OFF)
-#define RGB_RED_PIN      26
-#define RGB_GREEN_PIN    25
+#define RGB_RED_PIN      25
+#define RGB_GREEN_PIN    26
 #define RGB_BLUE_PIN     33
 #define RGB_COMMON_ANODE true
 
@@ -82,8 +82,8 @@ const char* DEVICE_KEY    = "flymedia_esp32_key_2026";
 
 // ===================== 3. TIMING & SECURITY ======================
 const unsigned long LOCAL_SCAN_COOLDOWN_MS = 3000;   // 3s debounce on device
-const unsigned long HEARTBEAT_INTERVAL_MS  = 30000;  // Ping server every 30s
-const unsigned long WIFI_RETRY_INTERVAL_MS = 15000;  // Retry Wi-Fi every 15s
+const unsigned long HEARTBEAT_INTERVAL_MS  = 5000;   // Live Wi-Fi status ping every 5s!
+const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;  // Retry Wi-Fi every 10s
 const int MAX_FAILED_STRIKES               = 3;      // Lockout after 3 bad scans
 const unsigned long LOCKOUT_DURATION_MS    = 10000;  // 10s lockout
 
@@ -93,10 +93,13 @@ Adafruit_Fingerprint finger(&fpSerial);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Preferences prefs;
 
-bool oledReady     = false;
-bool sensorReady   = false;
-uint32_t bootCount = 0;
-uint32_t eventSeq  = 0;
+bool oledReady            = false;
+bool sensorReady          = false;
+uint16_t storedTemplates  = 0;
+uint32_t bootCount        = 0;
+uint32_t eventSeq         = 0;
+String currentLine1       = "Booting...";
+String currentLine2       = "Initializing";
 
 unsigned long lastScanMs      = 0;
 unsigned long lastHeartbeatMs = 0;
@@ -127,6 +130,8 @@ void beep(int durationMs, int count = 1, int gapMs = 80) {
 }
 
 void showOLED(const String& line1, const String& line2 = "", const String& footer = "") {
+  currentLine1 = line1;
+  currentLine2 = line2;
   Serial.println("[OLED] " + line1 + (line2.length() ? " | " + line2 : ""));
   if (!oledReady) return;
 
@@ -470,10 +475,25 @@ bool deleteFingerprint(uint16_t id) {
 void sendHeartbeatAndCheckCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
 
-  String payload = "{\"device_id\":\"" + String(DEVICE_ID) + "\"}";
+  String safeL1 = currentLine1; safeL1.replace("\"", "'");
+  String safeL2 = currentLine2; safeL2.replace("\"", "'");
+  String ssidStr = WiFi.SSID(); ssidStr.replace("\"", "'");
+
+  String payload = "{\"device_id\":\"" + String(DEVICE_ID) +
+                   "\",\"wifi_ssid\":\"" + ssidStr +
+                   "\",\"ip_address\":\"" + WiFi.localIP().toString() +
+                   "\",\"rssi\":" + String(WiFi.RSSI()) +
+                   ",\"sensor_ready\":" + String(sensorReady ? "true" : "false") +
+                   ",\"oled_ready\":" + String(oledReady ? "true" : "false") +
+                   ",\"templates_count\":" + String(storedTemplates) +
+                   ",\"queued_events\":" + String(prefs.getInt("q_count", 0)) +
+                   ",\"uptime_seconds\":" + String(millis() / 1000) +
+                   ",\"display_line1\":\"" + safeL1 +
+                   "\",\"display_line2\":\"" + safeL2 + "\"}";
+
   String resp;
   int code = postJson("/heartbeat", payload, resp);
-  Serial.printf("[HEARTBEAT] HTTP %d\n", code);
+  Serial.printf("[HEARTBEAT] HTTP %d | RSSI: %d dBm | IP: %s\n", code, WiFi.RSSI(), WiFi.localIP().toString().c_str());
 
   if (code == 200) {
     // Also flush any queued offline scans while server is reachable
@@ -487,15 +507,20 @@ void sendHeartbeatAndCheckCommands() {
       bool ok   = false;
       String msg = "";
 
-      if (cmd == "ENROLL" && slot > 0) {
+      if (cmd == "ENROLL" && slot > 0 && sensorReady) {
         ok = enrollFingerprint(slot);
+        if (ok) { finger.getTemplateCount(); storedTemplates = finger.templateCount; }
         msg = ok ? "Enrolled on R307" : "Enrollment failed or timed out";
-      } else if (cmd == "DELETE" && slot > 0) {
+      } else if (cmd == "DELETE" && slot > 0 && sensorReady) {
         ok = deleteFingerprint(slot);
+        if (ok) { finger.getTemplateCount(); storedTemplates = finger.templateCount; }
         msg = ok ? "Deleted from R307" : "Delete failed";
-      } else if (cmd == "CLEAR_ALL") {
+      } else if (cmd == "CLEAR_ALL" && sensorReady) {
         ok = (finger.emptyDatabase() == FINGERPRINT_OK);
+        if (ok) storedTemplates = 0;
         msg = ok ? "Cleared all templates" : "Clear failed";
+      } else {
+        msg = "Sensor not ready";
       }
 
       if (cmdId > 0) {
@@ -583,24 +608,26 @@ void setup() {
     // Set highest matching strictness (Security Level 5)
     finger.setSecurityLevel(5);
     finger.getTemplateCount();
-    Serial.printf("[R307] Sensor OK! Security Level=5 | Stored Templates=%d\n", finger.templateCount);
-    showOLED("R307 Sensor OK", String(finger.templateCount) + " Enrolled");
-    delay(1000);
+    storedTemplates = finger.templateCount;
+    Serial.printf("[R307] Sensor OK! Security Level=5 | Stored Templates=%d\n", storedTemplates);
+    showOLED("R307 Sensor OK", String(storedTemplates) + " Enrolled");
+    delay(800);
   } else {
     sensorReady = false;
-    Serial.println("[R307] ERROR: Sensor not detected! Check TX/RX (GPIO 16/17) and power.");
+    Serial.println("[R307] WARNING: Sensor not detected! Continuing Wi-Fi telemetry so web dashboard shows status.");
     setRGB(true, false, false);
-    showOLED("Sensor Error!", "Check R307 Wire");
-    beep(500, 3);
-    while (true) {
-      handleSerialCommands();
-      delay(500);
-    }
+    showOLED("R307 Not Found", "Check TX/RX Pin");
+    beep(300, 2);
+    delay(800);
   }
 
   connectWiFi();
+  if (sensorReady) {
+    showReadyScreen();
+  } else {
+    showOLED("Wi-Fi Online", "Check R307 Wire");
+  }
   sendHeartbeatAndCheckCommands();
-  showReadyScreen();
 }
 
 void loop() {
@@ -613,13 +640,19 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
       flushOfflineQueue();
     }
-    showReadyScreen();
+    if (sensorReady) showReadyScreen();
   }
 
-  // Periodic heartbeat + check for remote Admin Enroll/Delete commands
-  if (millis() - lastHeartbeatMs > HEARTBEAT_INTERVAL_MS) {
+  // Periodic heartbeat every 5s (sends live Wi-Fi RSSI, IP, Sensor status & checks remote commands)
+  if (millis() - lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatMs = millis();
     sendHeartbeatAndCheckCommands();
+  }
+
+  // If R307 sensor was not connected, skip fingerprint scanning and keep Wi-Fi heartbeat alive
+  if (!sensorReady) {
+    delay(100);
+    return;
   }
 
   // Handle 3-strike lockout cooldown

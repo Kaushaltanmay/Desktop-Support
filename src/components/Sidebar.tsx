@@ -18,7 +18,8 @@ import {
   MapPin,
   CheckCircle2,
   MessageSquareWarning,
-  MessageCircle
+  MessageCircle,
+  Fingerprint
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -44,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const engineerNav = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
     { id: 'chat', label: 'Team Chat & Calls', icon: MessageCircle },
+    { id: 'biometric', label: 'ESP32 Biometric', icon: Fingerprint },
     { id: 'tickets', label: 'Task Board', icon: CheckSquare, badge: ticketCount },
     { id: 'employees', label: 'Team Directory', icon: Users },
     { id: 'departments', label: 'Departments', icon: Building2 },
@@ -67,6 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const hrNav = [
     { id: 'hrms-dashboard', label: 'HR Dashboard', icon: LayoutGrid },
     { id: 'chat', label: 'Team Chat & Calls', icon: MessageCircle },
+    { id: 'biometric', label: 'ESP32 Biometric', icon: Fingerprint },
     { id: 'hrms-attendance', label: 'Attendance Triage', icon: CheckSquare },
     { id: 'hrms-leaves', label: 'Leave Requests', icon: Calendar },
     { id: 'employees', label: 'Employees Directory', icon: Users },

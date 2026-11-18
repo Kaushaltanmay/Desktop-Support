@@ -16,6 +16,67 @@ interface DeviceRequest extends Request {
   };
 }
 
+export interface LiveDeviceTelemetry {
+  device_id: string;
+  last_ping_ms: number;
+  wifi_ssid: string;
+  ip_address: string;
+  rssi: number | null;
+  sensor_ready: boolean;
+  oled_ready: boolean;
+  templates_count: number;
+  queued_events: number;
+  uptime_seconds: number;
+  display_line1: string;
+  display_line2: string;
+  last_event_type: string;
+  ping_count: number;
+  rssi_history: Array<{ time: string; rssi: number }>;
+}
+
+// Live in-memory telemetry cache (updated every 5 seconds by ESP32 heartbeat)
+const liveTelemetry = new Map<string, LiveDeviceTelemetry>();
+
+function getOrCreateTelemetry(deviceId: string): LiveDeviceTelemetry {
+  let t = liveTelemetry.get(deviceId);
+  if (!t) {
+    t = {
+      device_id: deviceId,
+      last_ping_ms: 0,
+      wifi_ssid: '—',
+      ip_address: '—',
+      rssi: null,
+      sensor_ready: false,
+      oled_ready: false,
+      templates_count: 0,
+      queued_events: 0,
+      uptime_seconds: 0,
+      display_line1: 'Waiting for ESP32',
+      display_line2: 'OFFLINE',
+      last_event_type: 'NONE',
+      ping_count: 0,
+      rssi_history: []
+    };
+    liveTelemetry.set(deviceId, t);
+  }
+  return t;
+}
+
+function rssiToPercent(rssi: number | null): number {
+  if (rssi === null || isNaN(rssi)) return 0;
+  if (rssi >= -50) return 100;
+  if (rssi <= -100) return 0;
+  return Math.round(2 * (rssi + 100));
+}
+
+function rssiToQuality(rssi: number | null, online: boolean): string {
+  if (!online || rssi === null) return 'Offline';
+  if (rssi >= -55) return 'Excellent';
+  if (rssi >= -67) return 'Good';
+  if (rssi >= -78) return 'Fair';
+  return 'Weak';
+}
+
 function getTodayString(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -65,6 +126,8 @@ function authenticateDevice(req: DeviceRequest, res: Response, next: NextFunctio
 router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => {
   const device = req.biometricDevice!;
   const { fingerprint_slot, event_id, scanned_at } = req.body;
+  const tele = getOrCreateTelemetry(device.device_id);
+  tele.last_ping_ms = Date.now();
 
   if (fingerprint_slot === undefined || fingerprint_slot === null || isNaN(Number(fingerprint_slot))) {
     res.status(400).json({
@@ -79,7 +142,7 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
   const slot = Number(fingerprint_slot);
   const safeEventId = event_id ? String(event_id).trim() : `${device.device_id}-${slot}-${Date.now()}`;
 
-  // 1. Idempotency check (prevent duplicate records when ESP32 retries an offline event)
+  // 1. Idempotency check
   const existingLog = db.prepare(
     'SELECT * FROM biometric_scan_logs WHERE event_id = ?'
   ).get(safeEventId) as any;
@@ -115,6 +178,10 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
       VALUES (?, ?, ?, NULL, 'REJECTED_UNKNOWN', ?)
     `).run(safeEventId, device.device_id, slot, `Unmapped fingerprint slot #${slot}`);
 
+    tele.display_line1 = 'Unregistered';
+    tele.display_line2 = `Slot #${slot}`;
+    tele.last_event_type = 'REJECTED';
+
     res.status(404).json({
       status: 'REJECTED',
       error: `Fingerprint slot #${slot} is not assigned to any employee.`,
@@ -127,7 +194,7 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
   const employeeId = mapping.user_id;
   const shortName = firstNameOf(mapping.name);
 
-  // 3. 30-second cooldown check to block accidental double scans
+  // 3. 30-second cooldown check
   const recentScan = db.prepare(`
     SELECT id, created_at FROM biometric_scan_logs
     WHERE employee_id = ? AND action IN ('PUNCH_IN', 'PUNCH_OUT')
@@ -141,6 +208,10 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
       VALUES (?, ?, ?, ?, 'COOLDOWN', 'Ignored duplicate scan within 30s cooldown')
     `).run(safeEventId, device.device_id, slot, employeeId);
 
+    tele.display_line1 = shortName;
+    tele.display_line2 = 'Wait 30s...';
+    tele.last_event_type = 'COOLDOWN';
+
     res.status(200).json({
       status: 'COOLDOWN',
       employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
@@ -151,7 +222,7 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
     return;
   }
 
-  // 4. Process Punch In / Punch Out transactionally
+  // 4. Process Punch In / Punch Out
   const scanTime = scanned_at ? new Date(scanned_at) : new Date();
   const validScanTime = isNaN(scanTime.getTime()) ? new Date() : scanTime;
   const nowIso = validScanTime.toISOString();
@@ -219,6 +290,12 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
       VALUES ('ATTENDANCE', ?, ?, 'BIOMETRIC_PUNCH_IN', 'WORKING', ?)
     `).run(attendanceId, employeeId, `${mapping.name} punched IN via ${deviceInfo}`);
 
+    const l1 = `Hi ${shortName}`;
+    const l2 = lateMinutes > 0 ? `IN (Late ${lateMinutes}m)` : 'Punched IN!';
+    tele.display_line1 = l1;
+    tele.display_line2 = l2;
+    tele.last_event_type = 'PUNCH_IN';
+
     res.status(200).json({
       status: 'PUNCH_IN',
       employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
@@ -226,13 +303,13 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
       punch_in_at: nowIso,
       late_minutes: lateMinutes,
       message: `Punch In successful for ${mapping.name}`,
-      display_line1: `Hi ${shortName}`,
-      display_line2: lateMinutes > 0 ? `IN (Late ${lateMinutes}m)` : 'Punched IN!'
+      display_line1: l1,
+      display_line2: l2
     });
     return;
   }
 
-  // CASE B: Already punched in, not yet punched out -> PUNCH OUT
+  // CASE B: Already punched in -> PUNCH OUT
   if (!existingAttendance.punch_out_at) {
     const punchInTime = new Date(existingAttendance.punch_in_at);
     const schedule = {
@@ -282,6 +359,12 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
     `).run(existingAttendance.id, employeeId, metrics.status, `${mapping.name} punched OUT via ${deviceInfo}`);
 
     const hrs = (metrics.totalWorkMinutes / 60).toFixed(1);
+    const l1 = `Bye ${shortName}`;
+    const l2 = `OUT (${hrs}h)`;
+    tele.display_line1 = l1;
+    tele.display_line2 = l2;
+    tele.last_event_type = 'PUNCH_OUT';
+
     res.status(200).json({
       status: 'PUNCH_OUT',
       employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
@@ -289,17 +372,21 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
       punch_out_at: nowIso,
       total_work_minutes: metrics.totalWorkMinutes,
       message: `Punch Out successful for ${mapping.name}`,
-      display_line1: `Bye ${shortName}`,
-      display_line2: `OUT (${hrs}h)`
+      display_line1: l1,
+      display_line2: l2
     });
     return;
   }
 
-  // CASE C: Both Punch In and Punch Out already completed today
+  // CASE C: Both completed today
   db.prepare(`
     INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
     VALUES (?, ?, ?, ?, 'ALREADY_COMPLETED', 'Attendance already completed for today')
   `).run(safeEventId, device.device_id, slot, employeeId);
+
+  tele.display_line1 = shortName;
+  tele.display_line2 = 'Done For Today';
+  tele.last_event_type = 'ALREADY_COMPLETED';
 
   res.status(200).json({
     status: 'ALREADY_COMPLETED',
@@ -311,10 +398,31 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
 });
 
 // =========================================================================
-// 2. POST /api/biometric/heartbeat  (ESP32 online ping + fetch remote commands)
+// 2. POST /api/biometric/heartbeat  (ESP32 pings every 5s with live Wi-Fi & status!)
 // =========================================================================
 router.post('/heartbeat', authenticateDevice, (req: DeviceRequest, res: Response) => {
   const device = req.biometricDevice!;
+  const tele = getOrCreateTelemetry(device.device_id);
+  const nowMs = Date.now();
+
+  tele.last_ping_ms = nowMs;
+  tele.ping_count += 1;
+  if (req.body.wifi_ssid !== undefined) tele.wifi_ssid = String(req.body.wifi_ssid);
+  if (req.body.ip_address !== undefined) tele.ip_address = String(req.body.ip_address);
+  if (req.body.rssi !== undefined && !isNaN(Number(req.body.rssi))) {
+    const rssiVal = Number(req.body.rssi);
+    tele.rssi = rssiVal;
+    tele.rssi_history.push({ time: new Date().toLocaleTimeString(), rssi: rssiVal });
+    if (tele.rssi_history.length > 20) tele.rssi_history.shift();
+  }
+  if (req.body.sensor_ready !== undefined) tele.sensor_ready = Boolean(req.body.sensor_ready);
+  if (req.body.oled_ready !== undefined) tele.oled_ready = Boolean(req.body.oled_ready);
+  if (req.body.templates_count !== undefined) tele.templates_count = Number(req.body.templates_count) || 0;
+  if (req.body.queued_events !== undefined) tele.queued_events = Number(req.body.queued_events) || 0;
+  if (req.body.uptime_seconds !== undefined) tele.uptime_seconds = Number(req.body.uptime_seconds) || 0;
+  if (req.body.display_line1 !== undefined) tele.display_line1 = String(req.body.display_line1);
+  if (req.body.display_line2 !== undefined) tele.display_line2 = String(req.body.display_line2);
+
   const pendingCmd = db.prepare(`
     SELECT bc.*, u.name as employee_name
     FROM biometric_commands bc
@@ -351,6 +459,8 @@ router.post('/heartbeat', authenticateDevice, (req: DeviceRequest, res: Response
 router.post('/command-result', authenticateDevice, (req: DeviceRequest, res: Response) => {
   const device = req.biometricDevice!;
   const { command_id, success, message } = req.body;
+  const tele = getOrCreateTelemetry(device.device_id);
+  tele.last_ping_ms = Date.now();
 
   const cmd = db.prepare(
     'SELECT * FROM biometric_commands WHERE id = ? AND device_id = ?'
@@ -367,6 +477,9 @@ router.post('/command-result', authenticateDevice, (req: DeviceRequest, res: Res
     SET status = ?, result_message = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(finalStatus, message || '', cmd.id);
+
+  tele.display_line1 = success ? `${cmd.command} OK` : `${cmd.command} Failed`;
+  tele.display_line2 = cmd.fingerprint_slot ? `Slot #${cmd.fingerprint_slot}` : '';
 
   if (success) {
     if (cmd.command === 'ENROLL' && cmd.employee_id && cmd.fingerprint_slot) {
@@ -397,6 +510,11 @@ router.post('/scan-failed', authenticateDevice, (req: DeviceRequest, res: Respon
   const device = req.biometricDevice!;
   const { reason } = req.body;
   const eventId = `${device.device_id}-FAIL-${Date.now()}`;
+  const tele = getOrCreateTelemetry(device.device_id);
+  tele.last_ping_ms = Date.now();
+  tele.display_line1 = 'Not Recognised';
+  tele.display_line2 = 'Try Again';
+  tele.last_event_type = 'FAILED_SCAN';
 
   db.prepare(`
     INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
@@ -407,8 +525,76 @@ router.post('/scan-failed', authenticateDevice, (req: DeviceRequest, res: Respon
 });
 
 // =========================================================================
-// ADMIN / HR MANAGEMENT ENDPOINTS (Protected by JWT)
+// LIVE DASHBOARD & MANAGEMENT ENDPOINTS (Protected by JWT)
 // =========================================================================
+
+// GET /api/biometric/status  (Polled every 2-3s by the ESP32 Live Monitor page!)
+router.get('/status', authenticateToken, (_req: AuthenticatedRequest, res: Response) => {
+  const dbDevices = db.prepare(`
+    SELECT d.id, d.device_id, d.name, d.location, d.is_active, d.last_seen_at,
+      (SELECT COUNT(*) FROM fingerprint_mappings fm WHERE fm.device_id = d.device_id AND fm.is_active = 1) as mapped_count
+    FROM biometric_devices d
+    ORDER BY d.id ASC
+  `).all() as any[];
+
+  const now = Date.now();
+  const devices = dbDevices.map(d => {
+    const tele = getOrCreateTelemetry(d.device_id);
+    const secondsSincePing = tele.last_ping_ms > 0 ? Math.max(0, Math.floor((now - tele.last_ping_ms) / 1000)) : null;
+    // Considered ONLINE if ping received within the last 12 seconds (ESP32 pings every 5s)
+    const isOnline = secondsSincePing !== null && secondsSincePing <= 12;
+
+    return {
+      ...d,
+      is_online: isOnline,
+      seconds_since_last_seen: secondsSincePing,
+      wifi_ssid: tele.wifi_ssid,
+      ip_address: tele.ip_address,
+      rssi: isOnline ? tele.rssi : null,
+      signal_percent: isOnline ? rssiToPercent(tele.rssi) : 0,
+      signal_quality: rssiToQuality(tele.rssi, isOnline),
+      sensor_ready: tele.sensor_ready,
+      oled_ready: tele.oled_ready,
+      templates_count: tele.templates_count,
+      queued_events: tele.queued_events,
+      uptime_seconds: tele.uptime_seconds,
+      display_line1: isOnline ? tele.display_line1 : 'ESP32 Offline',
+      display_line2: isOnline ? tele.display_line2 : (secondsSincePing !== null ? `Lost ${secondsSincePing}s ago` : 'Waiting for ping...'),
+      ping_count: tele.ping_count,
+      rssi_history: tele.rssi_history
+    };
+  });
+
+  const mappings = db.prepare(`
+    SELECT fm.*, u.name as employee_name, u.email, u.employee_id as emp_code, u.role
+    FROM fingerprint_mappings fm
+    JOIN users u ON fm.employee_id = u.id
+    ORDER BY fm.fingerprint_slot ASC
+  `).all();
+
+  const recent_logs = db.prepare(`
+    SELECT l.*, u.name as employee_name, u.employee_id as emp_code
+    FROM biometric_scan_logs l
+    LEFT JOIN users u ON l.employee_id = u.id
+    ORDER BY l.id DESC LIMIT 25
+  `).all();
+
+  const pending_commands = db.prepare(`
+    SELECT bc.*, u.name as employee_name
+    FROM biometric_commands bc
+    LEFT JOIN users u ON bc.employee_id = u.id
+    WHERE bc.status IN ('PENDING', 'IN_PROGRESS')
+    ORDER BY bc.id DESC LIMIT 10
+  `).all();
+
+  res.json({
+    server_time: new Date().toISOString(),
+    devices,
+    mappings,
+    recent_logs,
+    pending_commands
+  });
+});
 
 // GET /api/biometric/devices
 router.get('/devices', authenticateToken, requireRole(['ADMIN', 'IT_ENGINEER', 'HR']), (_req: AuthenticatedRequest, res: Response) => {
@@ -432,7 +618,7 @@ router.get('/mappings', authenticateToken, requireRole(['ADMIN', 'IT_ENGINEER', 
   res.json({ mappings });
 });
 
-// POST /api/biometric/mappings  (Assign employee <-> slot, optionally queue ESP32 enrollment)
+// POST /api/biometric/mappings  (Assign employee <-> slot, optionally queue ESP32 remote enrollment)
 router.post('/mappings', authenticateToken, requireRole(['ADMIN', 'IT_ENGINEER', 'HR']), (req: AuthenticatedRequest, res: Response) => {
   const { employee_id, device_id = 'DEVICE001', fingerprint_slot, trigger_enroll = false } = req.body;
 
@@ -460,7 +646,9 @@ router.post('/mappings', authenticateToken, requireRole(['ADMIN', 'IT_ENGINEER',
   }
 
   res.status(201).json({
-    message: `Mapped employee #${employee_id} to slot #${fingerprint_slot} on ${device_id}.`,
+    message: trigger_enroll
+      ? `Queued remote enrollment for Slot #${fingerprint_slot}! Place finger on R307 when RGB LED turns Blue.`
+      : `Mapped employee #${employee_id} to slot #${fingerprint_slot} on ${device_id}.`,
     queued_command_id: queuedCommandId
   });
 });

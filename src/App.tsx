@@ -30,6 +30,7 @@ import { HolidaysView } from './components/hrms/HolidaysView';
 import { SchedulesView } from './components/hrms/SchedulesView';
 import { TeamFeedbackView } from './components/hrms/TeamFeedbackView';
 import { TeamChatView } from './components/chat/TeamChatView';
+import { BiometricTerminalView } from './components/BiometricTerminalView';
 
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
@@ -474,7 +475,16 @@ export function App() {
             />
           )}
 
-          {currentTab !== 'chat' && (
+          {/* Universal ESP32 Biometric Terminal — Live 5s Wi-Fi & Virtual OLED Monitor */}
+          {currentTab === 'biometric' && (
+            <BiometricTerminalView
+              users={users}
+              currentUser={currentUser}
+              onShowToast={showToast}
+            />
+          )}
+
+          {currentTab !== 'chat' && currentTab !== 'biometric' && (
             <>
               {/* ============================================================== */}
               {/* APPLICATION SUITE 1: DESKTOP IT SUPPORT                       */}

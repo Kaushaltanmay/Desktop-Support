@@ -19,7 +19,8 @@ import {
   Repeat, 
   Shield,
   MessageSquareWarning,
-  MessageCircle 
+  MessageCircle,
+  Fingerprint
 } from 'lucide-react';
 
 interface MobileDrawerProps {
@@ -256,6 +257,25 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               </button>
 
               <button
+                onClick={() => handleSelect('biometric')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: currentTab === 'biometric' ? '#e0f2fe' : 'transparent',
+                  color: currentTab === 'biometric' ? '#0284c7' : '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  textAlign: 'left'
+                }}
+              >
+                <Fingerprint size={18} />
+                <span>ESP32 Biometric</span>
+              </button>
+
+              <button
                 onClick={() => handleSelect(portalMode === 'EMPLOYEE' ? 'emp-tickets' : 'tickets')}
                 style={{
                   display: 'flex',
@@ -430,6 +450,25 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               >
                 <MessageCircle size={18} />
                 <span>Team Chat & Calls</span>
+              </button>
+
+              <button
+                onClick={() => handleSelect('biometric')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: currentTab === 'biometric' ? '#faf5ff' : 'transparent',
+                  color: currentTab === 'biometric' ? '#8b5cf6' : '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  textAlign: 'left'
+                }}
+              >
+                <Fingerprint size={18} />
+                <span>ESP32 Biometric</span>
               </button>
 
               <button

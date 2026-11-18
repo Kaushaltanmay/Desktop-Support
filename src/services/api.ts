@@ -355,4 +355,24 @@ export const api = {
   schedules: {
     getAll: () => request<{ schedules: any[] }>('/work-schedules'),
   },
+
+  biometric: {
+    getLiveStatus: () =>
+      request<{
+        server_time: string;
+        devices: any[];
+        mappings: any[];
+        recent_logs: any[];
+        pending_commands: any[];
+      }>('/biometric/status'),
+    saveMapping: (data: { employee_id: number; device_id?: string; fingerprint_slot: number; trigger_enroll?: boolean }) =>
+      request<{ message: string; queued_command_id: number | null }>('/biometric/mappings', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deleteMapping: (slot: number, triggerDelete = false, deviceId = 'DEVICE001') =>
+      request<{ message: string }>(`/biometric/mappings/${slot}?device_id=${encodeURIComponent(deviceId)}&trigger_delete=${triggerDelete}`, {
+        method: 'DELETE',
+      }),
+  },
 };
