@@ -382,9 +382,12 @@ router.post('/command-result', authenticateDevice, (req: DeviceRequest, res: Res
   const tele = getOrCreateTelemetry(device.device_id);
   tele.last_ping_ms = Date.now();
 
-  const cmd = db.prepare(
-    'SELECT * FROM biometric_commands WHERE id = ? AND device_id = ?'
-  ).get(command_id, device.device_id) as any;
+  const cmd = db.prepare(`
+    SELECT bc.*, u.name as employee_name
+    FROM biometric_commands bc
+    LEFT JOIN users u ON bc.employee_id = u.id
+    WHERE bc.id = ? AND bc.device_id = ?
+  `).get(command_id, device.device_id) as any;
 
   if (!cmd) {
     res.status(404).json({ error: 'Command not found.' });
@@ -400,6 +403,22 @@ router.post('/command-result', authenticateDevice, (req: DeviceRequest, res: Res
 
   tele.display_line1 = success ? `${cmd.command} OK` : `${cmd.command} Failed`;
   tele.display_line2 = cmd.fingerprint_slot ? `Slot #${cmd.fingerprint_slot}` : '';
+
+  const logAction = `${cmd.command}_${success ? 'SUCCESS' : 'FAILED'}`;
+  const empLabel = cmd.employee_name || (cmd.employee_id ? `Employee #${cmd.employee_id}` : 'Terminal');
+  const slotLabel = cmd.fingerprint_slot ? `UART Slot #${cmd.fingerprint_slot}` : 'All Slots';
+  const logMsg = success
+    ? (cmd.command === 'ENROLL'
+        ? `Fingerprint enrolled successfully for ${empLabel} (${slotLabel})`
+        : cmd.command === 'DELETE'
+          ? `Fingerprint template deleted (${slotLabel})`
+          : `All fingerprint templates cleared on ${device.device_id}`)
+    : `${cmd.command} failed for ${empLabel} (${slotLabel}): ${message || 'Sensor timeout / mismatch'}`;
+
+  db.prepare(`
+    INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(`${device.device_id}-CMD-${cmd.id}-${Date.now()}`, device.device_id, cmd.fingerprint_slot || null, cmd.employee_id || null, logAction, logMsg);
 
   if (success) {
     if (cmd.command === 'ENROLL' && cmd.employee_id && cmd.fingerprint_slot) {
@@ -594,10 +613,27 @@ router.get('/lab-attendance', authenticateToken, (req: AuthenticatedRequest, res
   const today = getTodayString();
   const todayCount = (db.prepare(`SELECT COUNT(*) as c FROM biometric_lab_attendance WHERE attendance_date = ?`).get(today) as any)?.c || 0;
 
+  const recent_logs = db.prepare(`
+    SELECT l.*, u.name as employee_name, u.employee_id as emp_code
+    FROM biometric_scan_logs l
+    LEFT JOIN users u ON l.employee_id = u.id
+    ORDER BY l.id DESC LIMIT 30
+  `).all();
+
+  const pending_commands = db.prepare(`
+    SELECT bc.*, u.name as employee_name
+    FROM biometric_commands bc
+    LEFT JOIN users u ON bc.employee_id = u.id
+    WHERE bc.status IN ('PENDING', 'IN_PROGRESS')
+    ORDER BY bc.id DESC LIMIT 10
+  `).all();
+
   res.json({
     sessions,
     currently_in_lab,
     enrolled_employees,
+    recent_logs,
+    pending_commands,
     summary: {
       inside_now: currently_in_lab.length,
       entries_today: todayCount,
@@ -653,6 +689,18 @@ router.post('/mappings', authenticateToken, requireRole(['ADMIN', 'IT_ENGINEER',
       VALUES (?, 'ENROLL', ?, ?, 'PENDING')
     `).run(device_id, Number(fingerprint_slot), Number(employee_id));
     queuedCommandId = Number(cmdRes.lastInsertRowid);
+
+    const empRow = db.prepare('SELECT name FROM users WHERE id = ?').get(Number(employee_id)) as any;
+    db.prepare(`
+      INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
+      VALUES (?, ?, ?, ?, 'ENROLL_QUEUED', ?)
+    `).run(
+      `${device_id}-ENROLL-Q-${queuedCommandId}`,
+      device_id,
+      Number(fingerprint_slot),
+      Number(employee_id),
+      `Enrollment requested for ${empRow?.name || 'Employee'} (UART Slot #${fingerprint_slot}) — waiting for finger on R307...`
+    );
   }
 
   res.status(201).json({

@@ -373,6 +373,8 @@ export const api = {
         sessions: any[];
         currently_in_lab: any[];
         enrolled_employees: any[];
+        recent_logs: any[];
+        pending_commands: any[];
         summary: { inside_now: number; entries_today: number; enrolled_count: number };
       }>(`/biometric/lab-attendance${qs ? `?${qs}` : ''}`);
     },

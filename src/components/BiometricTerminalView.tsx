@@ -684,8 +684,8 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
               </div>
             ) : (
               logs.map((log: any) => {
-                const isOk = ['LAB_IN', 'LAB_OUT', 'PUNCH_IN', 'PUNCH_OUT'].includes(log.action);
-                const isWarn = log.action === 'COOLDOWN' || log.action === 'ALREADY_COMPLETED';
+                const isOk = ['LAB_IN', 'LAB_OUT', 'PUNCH_IN', 'PUNCH_OUT', 'ENROLL_SUCCESS', 'DELETE_SUCCESS', 'CLEAR_ALL_SUCCESS'].includes(log.action);
+                const isWarn = ['COOLDOWN', 'ALREADY_COMPLETED', 'ENROLL_QUEUED'].includes(log.action);
                 return (
                   <div
                     key={log.id}
