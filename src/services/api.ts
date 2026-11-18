@@ -364,7 +364,18 @@ export const api = {
         mappings: any[];
         recent_logs: any[];
         pending_commands: any[];
+        lab_sessions: any[];
+        currently_in_lab: any[];
       }>('/biometric/status'),
+    getLabAttendance: (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request<{
+        sessions: any[];
+        currently_in_lab: any[];
+        enrolled_employees: any[];
+        summary: { inside_now: number; entries_today: number; enrolled_count: number };
+      }>(`/biometric/lab-attendance${qs ? `?${qs}` : ''}`);
+    },
     saveMapping: (data: { employee_id: number; device_id?: string; fingerprint_slot: number; trigger_enroll?: boolean }) =>
       request<{ message: string; queued_command_id: number | null }>('/biometric/mappings', {
         method: 'POST',

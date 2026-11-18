@@ -23,6 +23,7 @@ import {
   Copy,
   Check,
   Eye,
+  Fingerprint,
   EyeOff,
   Sparkles,
   User,
@@ -669,6 +670,44 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Biometric R307 UART Slot & Lab Door Status */}
+              <div style={{
+                padding: '8px 10px',
+                borderRadius: '8px',
+                background: user.fingerprint_slot ? '#f0f9ff' : '#f8fafc',
+                border: `1px solid ${user.fingerprint_slot ? '#bae6fd' : '#e2e8f0'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                fontSize: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Fingerprint size={14} color={user.fingerprint_slot ? '#0284c7' : '#94a3b8'} />
+                  {user.fingerprint_slot ? (
+                    <span style={{ color: '#0369a1', fontWeight: 700, fontFamily: 'monospace' }}>
+                      UART Slot #{user.fingerprint_slot} ({user.biometric_device_id || 'DEVICE001'})
+                    </span>
+                  ) : (
+                    <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                      Biometric UART not enrolled
+                    </span>
+                  )}
+                </div>
+                {user.fingerprint_slot && (
+                  <span style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    padding: '2px 7px',
+                    borderRadius: '999px',
+                    background: user.lab_status === 'IN_LAB' ? '#dcfce7' : '#e2e8f0',
+                    color: user.lab_status === 'IN_LAB' ? '#166534' : '#475569'
+                  }}>
+                    {user.lab_status === 'IN_LAB' ? '● IN LAB' : 'OUT LAB'}
+                  </span>
+                )}
               </div>
 
               {/* HR / Admin Action Toolbar: Edit, Reset Password, Delete */}

@@ -1,7 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { authenticateToken, requireRole, AuthenticatedRequest } from '../middleware/auth';
-import { calculateLateMinutes, calculateAttendanceMetrics, DEFAULT_SCHEDULE } from '../utils/attendanceCalc';
 
 const router = Router();
 
@@ -194,10 +193,10 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
   const employeeId = mapping.user_id;
   const shortName = firstNameOf(mapping.name);
 
-  // 3. 30-second cooldown check
+  // 3. 30-second cooldown check (prevent accidental double door taps)
   const recentScan = db.prepare(`
     SELECT id, created_at FROM biometric_scan_logs
-    WHERE employee_id = ? AND action IN ('PUNCH_IN', 'PUNCH_OUT')
+    WHERE employee_id = ? AND action IN ('LAB_IN', 'LAB_OUT', 'PUNCH_IN', 'PUNCH_OUT')
       AND created_at >= datetime('now', '-30 seconds')
     ORDER BY id DESC LIMIT 1
   `).get(employeeId) as any;
@@ -215,185 +214,106 @@ router.post('/scan', authenticateDevice, (req: DeviceRequest, res: Response) => 
     res.status(200).json({
       status: 'COOLDOWN',
       employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
-      message: 'Scan ignored: please wait 30 seconds between punches.',
+      message: 'Scan ignored: please wait 30 seconds between door scans.',
       display_line1: shortName,
       display_line2: 'Wait 30s...'
     });
     return;
   }
 
-  // 4. Process Punch In / Punch Out
+  // 4. Process Biometric Lab Door Entry / Exit (100% SEPARATE from App GPS Attendance!)
   const scanTime = scanned_at ? new Date(scanned_at) : new Date();
   const validScanTime = isNaN(scanTime.getTime()) ? new Date() : scanTime;
   const nowIso = validScanTime.toISOString();
   const today = nowIso.split('T')[0] || getTodayString();
+  const deviceInfo = `ESP32 Lab Door (${device.device_id}) - UART Slot #${slot}`;
 
-  const officeLat = mapping.office_lat ?? 30.7333;
-  const officeLon = mapping.office_lon ?? 76.7794;
-  const deviceInfo = `ESP32 Biometric Terminal (${device.device_id}) - Slot #${slot}`;
+  // Check if employee currently has an open IN_LAB session (multiple entries/exits per day supported!)
+  const openLabSession = db.prepare(`
+    SELECT * FROM biometric_lab_attendance
+    WHERE employee_id = ? AND status = 'IN_LAB' AND out_time IS NULL
+    ORDER BY id DESC LIMIT 1
+  `).get(employeeId) as any;
 
-  const existingAttendance = db.prepare(
-    'SELECT * FROM attendance WHERE employee_id = ? AND attendance_date = ?'
-  ).get(employeeId, today) as any;
-
-  // CASE A: First valid scan today -> PUNCH IN
-  if (!existingAttendance || !existingAttendance.punch_in_at) {
-    const lateMinutes = calculateLateMinutes(
-      validScanTime,
-      mapping.start_time || DEFAULT_SCHEDULE.start_time,
-      mapping.grace_period_minutes ?? DEFAULT_SCHEDULE.grace_period_minutes
-    );
-
-    let attendanceId: number;
-    if (existingAttendance) {
-      db.prepare(`
-        UPDATE attendance
-        SET punch_in_at = ?, punch_in_latitude = ?, punch_in_longitude = ?, punch_in_accuracy = 0,
-            late_minutes = ?, status = 'WORKING', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(nowIso, officeLat, officeLon, lateMinutes, existingAttendance.id);
-      attendanceId = existingAttendance.id;
-    } else {
-      const insertRes = db.prepare(`
-        INSERT INTO attendance (
-          employee_id, office_id, work_schedule_id, attendance_date,
-          punch_in_at, punch_in_latitude, punch_in_longitude, punch_in_accuracy,
-          late_minutes, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 'WORKING')
-      `).run(
-        employeeId,
-        mapping.office_id || 1,
-        mapping.work_schedule_id || 1,
-        today,
-        nowIso,
-        officeLat,
-        officeLon,
-        lateMinutes
-      );
-      attendanceId = Number(insertRes.lastInsertRowid);
-    }
-
-    db.prepare(`
-      INSERT INTO attendance_events (
-        employee_id, attendance_id, event_type, timestamp,
-        latitude, longitude, accuracy, office_id, distance_from_office, device_information
-      ) VALUES (?, ?, 'PUNCH_IN', ?, ?, ?, 0, ?, 0, ?)
-    `).run(employeeId, attendanceId, nowIso, officeLat, officeLon, mapping.office_id || 1, deviceInfo);
+  // CASE A: Employee is entering the lab -> LAB IN
+  if (!openLabSession) {
+    const insertRes = db.prepare(`
+      INSERT INTO biometric_lab_attendance (
+        employee_id, device_id, fingerprint_slot, attendance_date, in_time, status
+      ) VALUES (?, ?, ?, ?, ?, 'IN_LAB')
+    `).run(employeeId, device.device_id, slot, today, nowIso);
+    const labSessionId = Number(insertRes.lastInsertRowid);
 
     db.prepare(`
       INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
-      VALUES (?, ?, ?, ?, 'PUNCH_IN', ?)
-    `).run(safeEventId, device.device_id, slot, employeeId, `Biometric Punch IN for ${mapping.name}`);
+      VALUES (?, ?, ?, ?, 'LAB_IN', ?)
+    `).run(safeEventId, device.device_id, slot, employeeId, `${mapping.name} entered Lab (UART Slot #${slot})`);
 
     db.prepare(`
       INSERT INTO audit_logs (entity_type, entity_id, user_id, action, new_value, description)
-      VALUES ('ATTENDANCE', ?, ?, 'BIOMETRIC_PUNCH_IN', 'WORKING', ?)
-    `).run(attendanceId, employeeId, `${mapping.name} punched IN via ${deviceInfo}`);
+      VALUES ('BIOMETRIC_DOOR', ?, ?, 'BIOMETRIC_LAB_IN', 'IN_LAB', ?)
+    `).run(labSessionId, employeeId, `${mapping.name} entered Lab via ${deviceInfo}`);
 
     const l1 = `Hi ${shortName}`;
-    const l2 = lateMinutes > 0 ? `IN (Late ${lateMinutes}m)` : 'Punched IN!';
+    const l2 = 'LAB IN!';
     tele.display_line1 = l1;
     tele.display_line2 = l2;
-    tele.last_event_type = 'PUNCH_IN';
+    tele.last_event_type = 'LAB_IN';
 
     res.status(200).json({
-      status: 'PUNCH_IN',
+      status: 'LAB_IN',
       employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
-      attendance_id: attendanceId,
-      punch_in_at: nowIso,
-      late_minutes: lateMinutes,
-      message: `Punch In successful for ${mapping.name}`,
+      lab_session_id: labSessionId,
+      fingerprint_slot: slot,
+      in_time: nowIso,
+      message: `${mapping.name} entered the Lab (UART Slot #${slot})`,
       display_line1: l1,
       display_line2: l2
     });
     return;
   }
 
-  // CASE B: Already punched in -> PUNCH OUT
-  if (!existingAttendance.punch_out_at) {
-    const punchInTime = new Date(existingAttendance.punch_in_at);
-    const schedule = {
-      start_time: mapping.start_time || DEFAULT_SCHEDULE.start_time,
-      end_time: '18:30',
-      grace_period_minutes: mapping.grace_period_minutes ?? 10,
-      expected_hours: mapping.expected_hours || 9.0,
-      half_day_min_hours: mapping.half_day_min_hours || 4.0,
-      full_day_min_hours: mapping.full_day_min_hours || 8.0,
-      standard_daily_minutes: mapping.standard_daily_minutes || 540
-    };
+  // CASE B: Employee is currently inside the lab -> LAB OUT
+  const inDate = new Date(openLabSession.in_time);
+  const durationMinutes = Math.max(0, Math.round((validScanTime.getTime() - inDate.getTime()) / 60000));
 
-    const metrics = calculateAttendanceMetrics(punchInTime, validScanTime, schedule);
+  db.prepare(`
+    UPDATE biometric_lab_attendance
+    SET out_time = ?, duration_minutes = ?, status = 'OUT_LAB', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(nowIso, durationMinutes, openLabSession.id);
 
-    db.prepare(`
-      UPDATE attendance
-      SET punch_out_at = ?, punch_out_latitude = ?, punch_out_longitude = ?, punch_out_accuracy = 0,
-          total_work_minutes = ?, regular_work_minutes = ?, overtime_minutes = ?,
-          status = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      nowIso,
-      officeLat,
-      officeLon,
-      metrics.totalWorkMinutes,
-      metrics.regularWorkMinutes,
-      metrics.overtimeMinutes,
-      metrics.status,
-      existingAttendance.id
-    );
+  const durLabel = durationMinutes >= 60
+    ? `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`
+    : `${durationMinutes}m`;
 
-    db.prepare(`
-      INSERT INTO attendance_events (
-        employee_id, attendance_id, event_type, timestamp,
-        latitude, longitude, accuracy, office_id, distance_from_office, device_information
-      ) VALUES (?, ?, 'PUNCH_OUT', ?, ?, ?, 0, ?, 0, ?)
-    `).run(employeeId, existingAttendance.id, nowIso, officeLat, officeLon, mapping.office_id || 1, deviceInfo);
-
-    db.prepare(`
-      INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
-      VALUES (?, ?, ?, ?, 'PUNCH_OUT', ?)
-    `).run(safeEventId, device.device_id, slot, employeeId, `Biometric Punch OUT for ${mapping.name} (${metrics.totalWorkMinutes}m)`);
-
-    db.prepare(`
-      INSERT INTO audit_logs (entity_type, entity_id, user_id, action, new_value, description)
-      VALUES ('ATTENDANCE', ?, ?, 'BIOMETRIC_PUNCH_OUT', ?, ?)
-    `).run(existingAttendance.id, employeeId, metrics.status, `${mapping.name} punched OUT via ${deviceInfo}`);
-
-    const hrs = (metrics.totalWorkMinutes / 60).toFixed(1);
-    const l1 = `Bye ${shortName}`;
-    const l2 = `OUT (${hrs}h)`;
-    tele.display_line1 = l1;
-    tele.display_line2 = l2;
-    tele.last_event_type = 'PUNCH_OUT';
-
-    res.status(200).json({
-      status: 'PUNCH_OUT',
-      employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
-      attendance_id: existingAttendance.id,
-      punch_out_at: nowIso,
-      total_work_minutes: metrics.totalWorkMinutes,
-      message: `Punch Out successful for ${mapping.name}`,
-      display_line1: l1,
-      display_line2: l2
-    });
-    return;
-  }
-
-  // CASE C: Both completed today
   db.prepare(`
     INSERT INTO biometric_scan_logs (event_id, device_id, fingerprint_slot, employee_id, action, message)
-    VALUES (?, ?, ?, ?, 'ALREADY_COMPLETED', 'Attendance already completed for today')
-  `).run(safeEventId, device.device_id, slot, employeeId);
+    VALUES (?, ?, ?, ?, 'LAB_OUT', ?)
+  `).run(safeEventId, device.device_id, slot, employeeId, `${mapping.name} exited Lab after ${durLabel} (UART Slot #${slot})`);
 
-  tele.display_line1 = shortName;
-  tele.display_line2 = 'Done For Today';
-  tele.last_event_type = 'ALREADY_COMPLETED';
+  db.prepare(`
+    INSERT INTO audit_logs (entity_type, entity_id, user_id, action, new_value, description)
+    VALUES ('BIOMETRIC_DOOR', ?, ?, 'BIOMETRIC_LAB_OUT', 'OUT_LAB', ?)
+  `).run(openLabSession.id, employeeId, `${mapping.name} exited Lab after ${durLabel} via ${deviceInfo}`);
+
+  const l1 = `Bye ${shortName}`;
+  const l2 = `OUT (${durLabel})`;
+  tele.display_line1 = l1;
+  tele.display_line2 = l2;
+  tele.last_event_type = 'LAB_OUT';
 
   res.status(200).json({
-    status: 'ALREADY_COMPLETED',
+    status: 'LAB_OUT',
     employee: { id: employeeId, name: mapping.name, employee_code: mapping.emp_code },
-    message: `${mapping.name} has already completed attendance today.`,
-    display_line1: shortName,
-    display_line2: 'Done For Today'
+    lab_session_id: openLabSession.id,
+    fingerprint_slot: slot,
+    in_time: openLabSession.in_time,
+    out_time: nowIso,
+    duration_minutes: durationMinutes,
+    message: `${mapping.name} exited the Lab (${durLabel})`,
+    display_line1: l1,
+    display_line2: l2
   });
 });
 
@@ -443,12 +363,12 @@ router.post('/heartbeat', authenticateDevice, (req: DeviceRequest, res: Response
     device_id: device.device_id,
     pending_command: pendingCmd
       ? {
-          command_id: pendingCmd.id,
-          command: pendingCmd.command,
-          fingerprint_slot: pendingCmd.fingerprint_slot,
-          employee_id: pendingCmd.employee_id,
-          employee_name: pendingCmd.employee_name || ''
-        }
+        command_id: pendingCmd.id,
+        command: pendingCmd.command,
+        fingerprint_slot: pendingCmd.fingerprint_slot,
+        employee_id: pendingCmd.employee_id,
+        employee_name: pendingCmd.employee_name || ''
+      }
       : null
   });
 });
@@ -587,12 +507,102 @@ router.get('/status', authenticateToken, (_req: AuthenticatedRequest, res: Respo
     ORDER BY bc.id DESC LIMIT 10
   `).all();
 
+  // Separate Biometric Lab Door Entry/Exit sessions (distinct from App GPS Attendance)
+  const lab_sessions = db.prepare(`
+    SELECT b.*, u.name as employee_name, u.email, u.employee_id as emp_code, u.role,
+           d.name as department_name
+    FROM biometric_lab_attendance b
+    JOIN users u ON b.employee_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    ORDER BY b.id DESC LIMIT 50
+  `).all();
+
+  const currently_in_lab = db.prepare(`
+    SELECT b.*, u.name as employee_name, u.employee_id as emp_code, d.name as department_name
+    FROM biometric_lab_attendance b
+    JOIN users u ON b.employee_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    WHERE b.status = 'IN_LAB' AND b.out_time IS NULL
+    ORDER BY b.in_time DESC
+  `).all();
+
   res.json({
     server_time: new Date().toISOString(),
     devices,
     mappings,
     recent_logs,
-    pending_commands
+    pending_commands,
+    lab_sessions,
+    currently_in_lab
+  });
+});
+
+// GET /api/biometric/lab-attendance  (Dedicated HR & ESP32 Lab Door Attendance Register)
+router.get('/lab-attendance', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const { date, status, search } = req.query;
+
+  let query = `
+    SELECT b.*, u.name as employee_name, u.email, u.employee_id as emp_code, u.role,
+           d.name as department_name
+    FROM biometric_lab_attendance b
+    JOIN users u ON b.employee_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+
+  if (date) {
+    query += ` AND b.attendance_date = ?`;
+    params.push(String(date));
+  }
+  if (status && status !== 'all') {
+    query += ` AND b.status = ?`;
+    params.push(String(status));
+  }
+  if (search) {
+    query += ` AND (u.name LIKE ? OR u.email LIKE ? OR u.employee_id LIKE ?)`;
+    const p = `%${String(search)}%`;
+    params.push(p, p, p);
+  }
+
+  query += ` ORDER BY b.id DESC LIMIT 200`;
+  const sessions = db.prepare(query).all(...params);
+
+  const currently_in_lab = db.prepare(`
+    SELECT b.*, u.name as employee_name, u.employee_id as emp_code, d.name as department_name
+    FROM biometric_lab_attendance b
+    JOIN users u ON b.employee_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    WHERE b.status = 'IN_LAB' AND b.out_time IS NULL
+    ORDER BY b.in_time DESC
+  `).all();
+
+  const enrolled_employees = db.prepare(`
+    SELECT fm.id, fm.device_id, fm.fingerprint_slot, fm.enrolled_at, fm.is_active,
+           u.id as employee_id, u.name as employee_name, u.email, u.employee_id as emp_code, u.role,
+           d.name as department_name,
+           (SELECT status FROM biometric_lab_attendance bl WHERE bl.employee_id = u.id ORDER BY bl.id DESC LIMIT 1) as current_lab_status,
+           (SELECT in_time FROM biometric_lab_attendance bl WHERE bl.employee_id = u.id ORDER BY bl.id DESC LIMIT 1) as last_lab_in,
+           (SELECT out_time FROM biometric_lab_attendance bl WHERE bl.employee_id = u.id ORDER BY bl.id DESC LIMIT 1) as last_lab_out
+    FROM fingerprint_mappings fm
+    JOIN users u ON fm.employee_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    WHERE fm.is_active = 1
+    ORDER BY fm.fingerprint_slot ASC
+  `).all();
+
+  const today = getTodayString();
+  const todayCount = (db.prepare(`SELECT COUNT(*) as c FROM biometric_lab_attendance WHERE attendance_date = ?`).get(today) as any)?.c || 0;
+
+  res.json({
+    sessions,
+    currently_in_lab,
+    enrolled_employees,
+    summary: {
+      inside_now: currently_in_lab.length,
+      entries_today: todayCount,
+      enrolled_count: enrolled_employees.length
+    }
   });
 });
 

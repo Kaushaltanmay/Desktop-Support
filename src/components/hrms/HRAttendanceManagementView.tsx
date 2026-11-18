@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
-import { Search, Filter, Calendar, MapPin, Edit3, CheckCircle2, Clock, X, AlertCircle } from 'lucide-react';
+import { Search, Filter, Calendar, MapPin, Edit3, CheckCircle2, Clock, X, AlertCircle, Fingerprint, Smartphone, DoorOpen, RefreshCw } from 'lucide-react';
 import { AttendanceMapModal } from './AttendanceMapModal';
 
 interface HRAttendanceManagementViewProps {
@@ -12,8 +12,18 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
   departments,
   showToast
 }) => {
+  const [activeTab, setActiveTab] = useState<'APP' | 'BIOMETRIC_DOOR'>('APP');
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Separate Biometric Lab Door State
+  const [labData, setLabData] = useState<{
+    sessions: any[];
+    currently_in_lab: any[];
+    enrolled_employees: any[];
+    summary: { inside_now: number; entries_today: number; enrolled_count: number };
+  } | null>(null);
+  const [labLoading, setLabLoading] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -49,9 +59,34 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
     }
   };
 
+  const fetchLabDoorAttendance = async (silent = false) => {
+    try {
+      if (!silent) setLabLoading(true);
+      const params: Record<string, string> = {};
+      if (selectedDate) params.date = selectedDate;
+      if (search) params.search = search;
+      const res = await api.biometric.getLabAttendance(params);
+      setLabData(res);
+    } catch (err) {
+      console.error('Failed to load biometric lab door attendance:', err);
+    } finally {
+      if (!silent) setLabLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchRecords();
-  }, [selectedDate, selectedDept, selectedStatus, search]);
+    if (activeTab === 'APP') {
+      fetchRecords();
+    } else {
+      fetchLabDoorAttendance();
+    }
+  }, [activeTab, selectedDate, selectedDept, selectedStatus, search]);
+
+  useEffect(() => {
+    if (activeTab !== 'BIOMETRIC_DOOR') return;
+    const t = setInterval(() => fetchLabDoorAttendance(true), 5000);
+    return () => clearInterval(t);
+  }, [activeTab, selectedDate, search]);
 
   const handleOpenCorrection = (record: any) => {
     setCorrectingRecord(record);
@@ -91,16 +126,263 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }} className="animate-fade-in">
       
-      {/* Title */}
-      <div>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
-          Workforce Attendance Management & Triage
-        </h2>
-        <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
-          Inspect biometric check-in timestamps, GPS geofence verifications, and perform audited corrections.
-        </p>
+      {/* Title & Source Switcher (Strictly Separated: App GPS vs ESP32 Lab Door Fingerprint) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '14px' }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+            Workforce Attendance &amp; Biometric Lab Door
+          </h2>
+          <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '4px 0 0' }}>
+            App GPS Punch In/Out and ESP32 Lab Door Fingerprint records are tracked strictly separately.
+          </p>
+        </div>
+
+        <div style={{
+          display: 'inline-flex',
+          background: '#f1f5f9',
+          padding: '4px',
+          borderRadius: '11px',
+          border: '1px solid #e2e8f0',
+          gap: '4px'
+        }}>
+          <button
+            onClick={() => setActiveTab('APP')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              background: activeTab === 'APP' ? '#ffffff' : 'transparent',
+              color: activeTab === 'APP' ? '#0284c7' : '#64748b',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              boxShadow: activeTab === 'APP' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+            }}
+          >
+            <Smartphone size={15} />
+            App Attendance (GPS)
+          </button>
+
+          <button
+            onClick={() => setActiveTab('BIOMETRIC_DOOR')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              background: activeTab === 'BIOMETRIC_DOOR' ? '#ffffff' : 'transparent',
+              color: activeTab === 'BIOMETRIC_DOOR' ? '#059669' : '#64748b',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              boxShadow: activeTab === 'BIOMETRIC_DOOR' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+            }}
+          >
+            <Fingerprint size={15} />
+            Biometric Lab Door (ESP32)
+          </button>
+        </div>
       </div>
 
+      {/* ==================== TAB 2: SEPARATE BIOMETRIC LAB DOOR (ESP32 FINGERPRINT) ==================== */}
+      {activeTab === 'BIOMETRIC_DOOR' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Summary Strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+            <div className="app-card" style={{ padding: '16px 20px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Currently Inside Lab</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#059669', marginTop: '4px' }}>
+                {labData?.summary?.inside_now ?? 0}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Active IN_LAB door sessions</div>
+            </div>
+
+            <div className="app-card" style={{ padding: '16px 20px', borderLeft: '4px solid #0284c7' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Lab Entries Today</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>
+                {labData?.summary?.entries_today ?? 0}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Total fingerprint door punches today</div>
+            </div>
+
+            <div className="app-card" style={{ padding: '16px 20px', borderLeft: '4px solid #8b5cf6' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Enrolled UART Fingerprints</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#7c3aed', marginTop: '4px' }}>
+                {labData?.summary?.enrolled_count ?? 0}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Registered on R307 UART slots</div>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="app-card" style={{ padding: '14px 18px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+              <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '12px' }} />
+              <input
+                type="text"
+                placeholder="Search employee name or code..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: '100%', paddingLeft: '36px' }}
+              />
+            </div>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              style={{ width: '165px' }}
+            />
+            <button
+              onClick={() => fetchLabDoorAttendance(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 14px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+          </div>
+
+          {/* Enrolled Employees Biometric UART Directory */}
+          <div className="app-card" style={{ padding: '18px 20px' }}>
+            <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Fingerprint size={18} color="#0284c7" />
+              Enrolled Employees — Biometric UART Slots (R307)
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
+                    <th style={{ padding: '10px 12px' }}>UART Slot</th>
+                    <th style={{ padding: '10px 12px' }}>Employee</th>
+                    <th style={{ padding: '10px 12px' }}>Department</th>
+                    <th style={{ padding: '10px 12px' }}>Device</th>
+                    <th style={{ padding: '10px 12px' }}>Current Lab Status</th>
+                    <th style={{ padding: '10px 12px' }}>Last Lab IN</th>
+                    <th style={{ padding: '10px 12px' }}>Last Lab OUT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(labData?.enrolled_employees || []).map((emp: any) => (
+                    <tr key={emp.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 800, color: '#0369a1' }}>
+                        UART Slot #{emp.fingerprint_slot}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>
+                        {emp.employee_name} <span style={{ color: '#64748b', fontWeight: 500, fontSize: '0.74rem' }}>({emp.emp_code || emp.role})</span>
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#475569' }}>{emp.department_name || 'General'}</td>
+                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#475569' }}>{emp.device_id}</td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span style={{
+                          padding: '3px 9px',
+                          borderRadius: '999px',
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          background: emp.current_lab_status === 'IN_LAB' ? '#dcfce7' : '#f1f5f9',
+                          color: emp.current_lab_status === 'IN_LAB' ? '#166534' : '#475569'
+                        }}>
+                          {emp.current_lab_status === 'IN_LAB' ? '● IN LAB' : 'OUT LAB'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#0f172a' }}>
+                        {emp.last_lab_in ? new Date(emp.last_lab_in).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#0f172a' }}>
+                        {emp.last_lab_out ? new Date(emp.last_lab_out).toLocaleString() : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Biometric Lab Door Entry/Exit Register */}
+          <div className="app-card" style={{ padding: '18px 20px' }}>
+            <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <DoorOpen size={18} color="#059669" />
+              Lab Door Entry / Exit History (Fingerprint Only)
+            </h3>
+            {labLoading ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Loading Lab Door records...</div>
+            ) : (labData?.sessions || []).length === 0 ? (
+              <div style={{ padding: '28px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
+                No fingerprint Lab IN / OUT entries yet. Scan an enrolled finger on the ESP32 door terminal to log Lab entry and exit times!
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
+                      <th style={{ padding: '10px 12px' }}>Date</th>
+                      <th style={{ padding: '10px 12px' }}>Employee</th>
+                      <th style={{ padding: '10px 12px' }}>UART Slot</th>
+                      <th style={{ padding: '10px 12px' }}>Lab IN (Fingerprint)</th>
+                      <th style={{ padding: '10px 12px' }}>Lab OUT (Fingerprint)</th>
+                      <th style={{ padding: '10px 12px' }}>Time in Lab</th>
+                      <th style={{ padding: '10px 12px' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(labData?.sessions || []).map((s: any) => (
+                      <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>{s.attendance_date}</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>
+                          {s.employee_name}
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>{s.department_name || s.role}</div>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: '#0369a1' }}>
+                          Slot #{s.fingerprint_slot}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#059669', fontWeight: 700 }}>
+                          {s.in_time ? new Date(s.in_time).toLocaleTimeString() : '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#0284c7', fontWeight: 700 }}>
+                          {s.out_time ? new Date(s.out_time).toLocaleTimeString() : 'Still Inside'}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>
+                          {s.out_time ? `${s.duration_minutes} min` : 'Active...'}
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 9px',
+                            borderRadius: '999px',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            background: s.status === 'IN_LAB' ? '#dcfce7' : '#e0f2fe',
+                            color: s.status === 'IN_LAB' ? '#166534' : '#0369a1'
+                          }}>
+                            {s.status === 'IN_LAB' ? '● IN LAB' : 'OUT LAB'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB 1: EXISTING APP GPS ATTENDANCE (UNTOUCHED) ==================== */}
+      {activeTab === 'APP' && (
+        <>
       {/* Filter Toolbar */}
       <div className="app-card" style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
@@ -453,6 +735,8 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
             </form>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

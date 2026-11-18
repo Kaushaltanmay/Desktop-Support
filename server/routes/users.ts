@@ -162,9 +162,15 @@ router.get('/', authenticateToken, requireRole(['IT_ENGINEER', 'ADMIN', 'HR']), 
   let query = `
     SELECT u.id, u.name, u.username, u.email, u.role, u.department_id, u.employee_id, u.phone, u.designation, u.is_active, u.created_at,
            d.name as department_name,
-           GROUP_CONCAT(dev.asset_tag, ', ') as asset_tag,
-           GROUP_CONCAT(dev.device_name, ', ') as device_name,
-           MIN(dev.id) as device_id
+           GROUP_CONCAT(DISTINCT dev.asset_tag) as asset_tag,
+           GROUP_CONCAT(DISTINCT dev.device_name) as device_name,
+           MIN(dev.id) as device_id,
+           (SELECT fm.fingerprint_slot FROM fingerprint_mappings fm WHERE fm.employee_id = u.id AND fm.is_active = 1 ORDER BY fm.id DESC LIMIT 1) as fingerprint_slot,
+           (SELECT fm.device_id FROM fingerprint_mappings fm WHERE fm.employee_id = u.id AND fm.is_active = 1 ORDER BY fm.id DESC LIMIT 1) as biometric_device_id,
+           (SELECT fm.enrolled_at FROM fingerprint_mappings fm WHERE fm.employee_id = u.id AND fm.is_active = 1 ORDER BY fm.id DESC LIMIT 1) as biometric_enrolled_at,
+           (SELECT bl.status FROM biometric_lab_attendance bl WHERE bl.employee_id = u.id ORDER BY bl.id DESC LIMIT 1) as lab_status,
+           (SELECT bl.in_time FROM biometric_lab_attendance bl WHERE bl.employee_id = u.id ORDER BY bl.id DESC LIMIT 1) as last_lab_in,
+           (SELECT bl.out_time FROM biometric_lab_attendance bl WHERE bl.employee_id = u.id ORDER BY bl.id DESC LIMIT 1) as last_lab_out
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
     LEFT JOIN devices dev ON dev.employee_id = u.id

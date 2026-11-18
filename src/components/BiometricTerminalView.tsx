@@ -55,6 +55,8 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
     mappings: any[];
     recent_logs: any[];
     pending_commands: any[];
+    lab_sessions?: any[];
+    currently_in_lab?: any[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -97,6 +99,8 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
   const mappings = statusData?.mappings || [];
   const logs = statusData?.recent_logs || [];
   const pendingCommands = statusData?.pending_commands || [];
+  const labSessions = statusData?.lab_sessions || [];
+  const currentlyInLab = statusData?.currently_in_lab || [];
 
   const handleTriggerEnroll = async (triggerEnroll: boolean) => {
     const empId = Number(selectedEmpId);
@@ -680,7 +684,7 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
               </div>
             ) : (
               logs.map((log: any) => {
-                const isOk = log.action === 'PUNCH_IN' || log.action === 'PUNCH_OUT';
+                const isOk = ['LAB_IN', 'LAB_OUT', 'PUNCH_IN', 'PUNCH_OUT'].includes(log.action);
                 const isWarn = log.action === 'COOLDOWN' || log.action === 'ALREADY_COMPLETED';
                 return (
                   <div
@@ -734,6 +738,100 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Dedicated Lab Door Entry / Exit Register (Strictly Separate from App GPS Attendance) */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '1px solid #e2e8f0',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '14px'
+      }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <div>
+            <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              🚪 Lab Door Entry / Exit Register (ESP32 Fingerprint Only)
+            </h2>
+            <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '3px 0 0' }}>
+              Tracks exact Lab IN &amp; Lab OUT times via R307 UART fingerprint — 100% separate from App GPS Attendance.
+            </p>
+          </div>
+          <span style={{
+            padding: '6px 14px',
+            borderRadius: '999px',
+            fontSize: '0.78rem',
+            fontWeight: 800,
+            background: currentlyInLab.length > 0 ? '#dcfce7' : '#f1f5f9',
+            color: currentlyInLab.length > 0 ? '#166534' : '#475569'
+          }}>
+            Currently Inside Lab: {currentlyInLab.length}
+          </span>
+        </div>
+
+        {labSessions.length === 0 ? (
+          <div style={{
+            padding: '26px 16px',
+            textAlign: 'center',
+            color: '#94a3b8',
+            fontSize: '0.84rem',
+            background: '#f8fafc',
+            borderRadius: '12px',
+            border: '1px dashed #cbd5e1'
+          }}>
+            No Lab Door entries recorded yet. Place an enrolled finger on R307 to record Lab IN / Lab OUT!
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
+                  <th style={{ padding: '10px 12px' }}>Date</th>
+                  <th style={{ padding: '10px 12px' }}>Employee</th>
+                  <th style={{ padding: '10px 12px' }}>UART Slot</th>
+                  <th style={{ padding: '10px 12px' }}>Lab IN Time</th>
+                  <th style={{ padding: '10px 12px' }}>Lab OUT Time</th>
+                  <th style={{ padding: '10px 12px' }}>Duration</th>
+                  <th style={{ padding: '10px 12px' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {labSessions.map((s: any) => (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>{s.attendance_date}</td>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>{s.employee_name}</td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: '#0369a1' }}>
+                      UART Slot #{s.fingerprint_slot}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#059669' }}>
+                      {s.in_time ? new Date(s.in_time).toLocaleTimeString() : '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0284c7' }}>
+                      {s.out_time ? new Date(s.out_time).toLocaleTimeString() : 'Still Inside'}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>
+                      {s.out_time ? `${s.duration_minutes}m` : 'Active...'}
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <span style={{
+                        padding: '3px 9px',
+                        borderRadius: '999px',
+                        fontSize: '0.72rem',
+                        fontWeight: 800,
+                        background: s.status === 'IN_LAB' ? '#dcfce7' : '#e0f2fe',
+                        color: s.status === 'IN_LAB' ? '#166534' : '#0369a1'
+                      }}>
+                        {s.status === 'IN_LAB' ? '● IN LAB' : 'OUT LAB'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

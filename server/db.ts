@@ -318,6 +318,23 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Separate Biometric Lab Door Entry/Exit Table (Strictly separate from App GPS Attendance)
+    CREATE TABLE IF NOT EXISTS biometric_lab_attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_id TEXT NOT NULL,
+      fingerprint_slot INTEGER NOT NULL,
+      attendance_date TEXT NOT NULL,
+      in_time DATETIME NOT NULL,
+      out_time DATETIME,
+      duration_minutes INTEGER DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'IN_LAB' CHECK (status IN ('IN_LAB', 'OUT_LAB')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_bio_lab_emp_date ON biometric_lab_attendance(employee_id, attendance_date);
+    CREATE INDEX IF NOT EXISTS idx_bio_lab_status ON biometric_lab_attendance(status);
   `);
 
   seedData();
