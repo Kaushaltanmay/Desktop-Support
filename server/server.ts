@@ -18,6 +18,7 @@ import holidayRoutes from './routes/holidays';
 import scheduleRoutes from './routes/schedules';
 import feedbackRoutes from './routes/feedback';
 import chatRoutes from './routes/chat';
+import biometricRoutes from './routes/biometric';
 import path from 'path';
 import fs from 'fs';
 
@@ -28,9 +29,9 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: '*', // Allow web app & mobile app clients
+  origin: '*', // Allow web app, mobile app, and ESP32 IoT devices
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Key', 'X-Device-Id']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -138,6 +139,7 @@ app.use('/api/holidays', holidayRoutes);
 app.use('/api/work-schedules', scheduleRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/biometric', biometricRoutes);
 
 // Static uploads directory for chat attachments (photos, videos, audio, documents)
 app.use('/uploads', express.static(path.join(process.cwd(), 'server', 'uploads')));

@@ -273,11 +273,57 @@ export function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_chat_sender_recipient ON chat_messages(sender_id, recipient_id);
     CREATE INDEX IF NOT EXISTS idx_chat_created_at ON chat_messages(created_at);
+
+    -- 7. IoT Biometric Attendance Terminals (ESP32 + R307 Fingerprint Sensor)
+    CREATE TABLE IF NOT EXISTS biometric_devices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      location TEXT DEFAULT 'Main Office Entrance',
+      api_key TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      last_seen_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS fingerprint_mappings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_id TEXT NOT NULL,
+      fingerprint_slot INTEGER NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(device_id, fingerprint_slot)
+    );
+
+    CREATE TABLE IF NOT EXISTS biometric_scan_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id TEXT UNIQUE,
+      device_id TEXT NOT NULL,
+      fingerprint_slot INTEGER,
+      employee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      action TEXT NOT NULL,
+      message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS biometric_commands (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL,
+      command TEXT NOT NULL CHECK (command IN ('ENROLL', 'DELETE', 'CLEAR_ALL')),
+      fingerprint_slot INTEGER,
+      employee_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED')),
+      result_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   seedData();
   seedHrmsData();
   seedChatData();
+  seedBiometricData();
 }
 
 function migrateUsersTableIfNeeded() {
@@ -717,5 +763,26 @@ function seedChatData() {
       'Great job bro! Everything is super responsive and smooth.',
       'TEXT', null, null, null, null, 1, tMinus(15)
     );
+  }
+}
+
+function seedBiometricData() {
+  const existingDevice = db.prepare("SELECT id FROM biometric_devices WHERE device_id = 'DEVICE001'").get();
+  if (!existingDevice) {
+    db.prepare(`
+      INSERT INTO biometric_devices (device_id, name, location, api_key, is_active)
+      VALUES ('DEVICE001', 'Main Gate ESP32 Terminal', 'Fly Media HQ - Entrance', 'flymedia_esp32_key_2026', 1)
+    `).run();
+
+    // Seed default fingerprint slot mappings for active employees (Slots 1..4)
+    const users = db.prepare("SELECT id FROM users ORDER BY id ASC LIMIT 10").all() as Array<{ id: number }>;
+    const insertMapping = db.prepare(`
+      INSERT OR IGNORE INTO fingerprint_mappings (employee_id, device_id, fingerprint_slot, is_active)
+      VALUES (?, 'DEVICE001', ?, 1)
+    `);
+    users.forEach((u, idx) => {
+      insertMapping.run(u.id, idx + 1);
+    });
+    console.log(`[BIOMETRIC] Seeded DEVICE001 with ${users.length} default fingerprint slot mappings.`);
   }
 }
