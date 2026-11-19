@@ -34,6 +34,9 @@
   --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -230,13 +233,42 @@ input:focus, select:focus, textarea:focus {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Mobile & Capacitor App Optimizations */
-:root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+/* ==========================================================================
+   DEFAULT BASE GRIDS & TABLES (Desktop & Tablet)
+   ========================================================================== */
+.stat-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
 }
 
-/* Mobile Bottom Navigation Bar: Visible ONLY on mobile/touch screens (< 768px), strictly hidden on desktop */
+.grid-responsive-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.table-responsive-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+}
+
+.table-responsive-wrapper table {
+  min-width: 600px;
+}
+
+.table-responsive-wrapper::-webkit-scrollbar {
+  height: 4px;
+}
+
+.table-responsive-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Mobile Bottom Navigation Bar: Visible ONLY on mobile (< 769px), strictly hidden on desktop */
 .mobile-bottom-nav {
   display: flex !important;
 }
@@ -247,10 +279,28 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
+/* ==========================================================================
+   MOBILE VIEWPORT RESPONSIVENESS (< 768px)
+   Universal Support for:
+   - 360px: Redmi, Samsung Galaxy A, Xiaomi
+   - 375px: iPhone SE, iPhone 12/13 Mini
+   - 390px: iPhone 12 / 13 / 14 / 15 / Pro
+   - 412px: Samsung Galaxy S23 / S24 Ultra, Google Pixel
+   - 430px: iPhone 14 / 15 Pro Max
+   ========================================================================== */
 @media (max-width: 768px) {
+  /* Sleek, Non-Bloated Mobile Header */
   .app-header {
-    padding-top: max(38px, var(--safe-top)) !important;
-    height: calc(64px + max(38px, var(--safe-top))) !important;
+    height: calc(56px + var(--safe-top)) !important;
+    padding-top: var(--safe-top) !important;
+    padding-bottom: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .app-header img[alt="Fly Media Technology"] {
+    height: 26px !important;
+    max-width: 120px !important;
   }
 
   .sidebar-desktop {
@@ -259,6 +309,8 @@ input:focus, select:focus, textarea:focus {
 
   .mobile-hamburger-btn {
     display: flex !important;
+    padding: 6px !important;
+    border-radius: 8px !important;
   }
 
   .desktop-only {
@@ -273,12 +325,32 @@ input:focus, select:focus, textarea:focus {
     display: none !important;
   }
 
-  .app-switcher-text {
-    font-size: 0.72rem;
+  /* Compact Mobile Application Switcher Pills */
+  .header-app-switcher {
+    padding: 2px !important;
+    border-radius: 8px !important;
+    gap: 2px !important;
   }
 
+  .header-app-switcher button {
+    padding: 5px 8px !important;
+    font-size: 0.72rem !important;
+    gap: 4px !important;
+    border-radius: 6px !important;
+  }
+
+  .header-app-switcher button svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .app-switcher-text {
+    font-size: 0.72rem !important;
+  }
+
+  /* Main Canvas: Never overlaps with bottom nav or home indicator */
   .app-main-content:not(.chat-active) {
-    padding: 16px 14px 84px 14px !important;
+    padding: 12px 12px calc(76px + var(--safe-bottom)) 12px !important;
   }
 
   .app-main-content.chat-active {
@@ -287,19 +359,108 @@ input:focus, select:focus, textarea:focus {
     overflow: hidden !important;
   }
 
-  /* Grid adaptations for mobile viewports */
-  .grid-responsive-cards {
-    grid-template-columns: 1fr !important;
+  /* Cards Mobile Padding */
+  .app-card {
+    padding: 16px 14px !important;
+    border-radius: 12px !important;
   }
 
+  /* THE KEY FIX: 2 Columns for Stat & Metric Cards on EVERY phone */
+  .stat-grid-2col,
   .grid-responsive-stats {
+    display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .stat-card {
+    padding: 12px 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .stat-card div[style*="fontSize: '2.25rem'"],
+  .stat-card div[style*="fontSize: '2.2rem'"],
+  .stat-card div[style*="2.25rem"],
+  .stat-card div[style*="2.2rem"],
+  .stat-card p[style*="fontSize: '1.75rem'"],
+  .stat-card p[style*="1.75rem"] {
+    font-size: 1.55rem !important;
+    margin-top: 2px !important;
+    line-height: 1.15 !important;
+  }
+
+  .stat-card div[style*="fontSize: '0.78rem'"],
+  .stat-card span[style*="fontSize: '0.72rem'"],
+  .stat-card span[style*="fontSize: '0.7rem'"] {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  /* Responsive 1-column layout for wider components */
+  .grid-responsive-cards {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* Mobile Bottom Navigation Bar with Safe Area support */
+  .mobile-bottom-nav {
+    height: calc(58px + var(--safe-bottom)) !important;
+    padding-bottom: var(--safe-bottom) !important;
+    box-sizing: border-box !important;
+  }
+
+  .mobile-bottom-nav button {
+    padding: 4px 6px !important;
+  }
+
+  .mobile-bottom-nav span {
+    font-size: 0.64rem !important;
+  }
+
+  /* Fast Alert Mode card & Switch cards on mobile */
+  .fast-alert-card {
+    padding: 14px 16px !important;
+  }
+
+  /* Hardware Health Strip on OLED Mirror */
+  .oled-health-strip {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .oled-health-strip > div {
+    padding: 8px 6px !important;
+  }
+
+  .oled-health-strip div {
+    font-size: 0.72rem !important;
+  }
+
+  /* Wi-Fi info strip inside terminal card */
+  .wifi-info-strip {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Employee Biometric Slot Enroll Form */
+  .slot-enroll-form select {
+    width: 100% !important;
+    flex: 1 1 100% !important;
   }
 
   /* Tables horizontal scrollwrapper */
   .table-responsive-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 10px !important;
+  }
+
+  .table-responsive-wrapper table {
+    min-width: 600px !important;
   }
 }
 
@@ -313,9 +474,40 @@ body.keyboard-visible .mobile-bottom-nav {
   display: none !important;
 }
 
-@media (max-width: 480px) {
+/* ==========================================================================
+   EXTRA COMPACT SCREENS (<= 375px: iPhone SE, iPhone 12/13 Mini, Redmi 360px)
+   ========================================================================== */
+@media (max-width: 375px) {
+  .app-header {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .header-app-switcher button {
+    padding: 4px 6px !important;
+    font-size: 0.68rem !important;
+  }
+
+  .app-switcher-text {
+    font-size: 0.66rem !important;
+  }
+
+  .stat-grid-2col,
   .grid-responsive-stats {
-    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .stat-card {
+    padding: 10px 10px !important;
+  }
+
+  .stat-card div[style*="fontSize: '2.25rem'"],
+  .stat-card div[style*="fontSize: '2.2rem'"],
+  .stat-card p[style*="fontSize: '1.75rem'"] {
+    font-size: 1.35rem !important;
+  }
+
+  .oled-health-strip {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
-

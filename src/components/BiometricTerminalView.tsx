@@ -221,9 +221,9 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
       </div>
 
       {/* Top Grid: Live Wi-Fi Status + Virtual OLED Screen */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '18px'
       }}>
         {/* Live Wi-Fi & Connection Card */}
@@ -298,7 +298,7 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
               }} />
             </div>
 
-            <div style={{
+            <div className="wifi-info-strip" style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: '10px',
@@ -446,7 +446,7 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
           </div>
 
           {/* Hardware Health Strip */}
-          <div style={{
+          <div className="oled-health-strip" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '10px'
@@ -507,9 +507,9 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
       )}
 
       {/* Bottom Grid: Fingerprint Slot Mappings + Live Scan Feed */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '18px'
       }}>
         {/* Fingerprint Slot Mappings & Remote Enrollment */}
@@ -530,7 +530,7 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
           </div>
 
           {canManage && (
-            <div style={{
+            <div className="slot-enroll-form" style={{
               background: '#f8fafc',
               borderRadius: '12px',
               padding: '12px',
@@ -784,8 +784,8 @@ export const BiometricTerminalView: React.FC<BiometricTerminalViewProps> = ({
             No Lab Door entries recorded yet. Place an enrolled finger on R307 to record Lab IN / Lab OUT!
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <div className="table-responsive-wrapper">
+            <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
                   <th style={{ padding: '10px 12px' }}>Date</th>

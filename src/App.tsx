@@ -291,6 +291,17 @@ export function App() {
       }).then(handle => { removeHide = handle; }).catch(() => {});
     }).catch(() => {});
 
+    // 3. Configure Android / iOS Native Status Bar (Prevents overlapping header)
+    import('@capacitor/core').then(({ Capacitor }) => {
+      if (Capacitor.isNativePlatform()) {
+        import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+          StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+          StatusBar.setBackgroundColor({ color: '#ffffff' }).catch(() => {});
+          StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+
     return () => {
       window.removeEventListener('focusin', handleFocusIn);
       window.removeEventListener('focusout', handleFocusOut);

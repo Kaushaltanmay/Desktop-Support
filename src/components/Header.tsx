@@ -64,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
       zIndex: 50
     }}>
       {/* Left: Hamburger (Mobile) + Fly Media Technology Logo & Subtitle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="header-left-brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {onOpenMenu && (
           <button
             type="button"
@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right Controls: Exactly matching reference UI */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="header-right-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         
         {/* Unified Application Switcher: IT Support <-> HRMS */}
         <div className="header-app-switcher" style={{
@@ -231,10 +231,10 @@ export const Header: React.FC<HeaderProps> = ({
             }}>
               {initial}
             </div>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
+            <span className="desktop-only" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
               {displayName}
             </span>
-            <ChevronDown size={14} color="#64748b" />
+            <ChevronDown className="desktop-only" size={14} color="#64748b" />
           </button>
 
           {/* User Dropdown */}

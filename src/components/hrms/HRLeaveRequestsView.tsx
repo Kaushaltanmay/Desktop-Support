@@ -110,8 +110,8 @@ export const HRLeaveRequestsView: React.FC<HRLeaveRequestsViewProps> = ({ showTo
           </span>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+        <div className="table-responsive-wrapper">
+          <table style={{ width: '100%', minWidth: '680px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 20px', fontWeight: 700 }}>Employee</th>

@@ -518,9 +518,9 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
       </div>
 
       {/* Employee Cards Grid */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
         gap: '16px'
       }}>
         {filteredUsers.map(user => {
@@ -1336,8 +1336,8 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                     Download Sample Sheet (.xlsx)
                   </button>
                 </div>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                  <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <div className="table-responsive-wrapper" style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                  <table style={{ width: '100%', minWidth: '500px', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
                     <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', position: 'sticky', top: 0 }}>
                       <tr>
                         <th style={{ padding: '6px 10px' }}>Name</th>
@@ -1434,8 +1434,8 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
               Below are the newly registered candidates and their portal login credentials. Copy or distribute them to candidates so they can log in.
             </p>
 
-            <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '16px' }}>
-              <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <div className="table-responsive-wrapper" style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '16px' }}>
+              <table style={{ width: '100%', minWidth: '450px', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', position: 'sticky', top: 0 }}>
                   <tr>
                     <th style={{ padding: '8px 10px' }}>Name</th>

@@ -91,9 +91,9 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({ currentUser, showToa
       </div>
 
       {/* Holidays Grid */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
         gap: '16px'
       }}>
         {holidays.map(h => {

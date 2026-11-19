@@ -17,10 +17,16 @@
  *        Red   -> GPIO 25
  *        Green -> GPIO 26
  *        Blue  -> GPIO 33
- *    - Active Buzzer Module (3.3V-5V):
- *        VCC -> 3V3
+ *      LED COLOR BEHAVIOR:
+ *        WHITE   (R+G+B) -> Sensor IDLE / Ready, waiting for finger
+ *        BLUE    (B)     -> Fingerprint scan in progress (finger placed)
+ *        MAGENTA (R+B)   -> Fingerprint ENROLLMENT in progress (Step 1 & 2)
+ *        GREEN   (G)     -> SUCCESS (Verification OK / Enroll OK)
+ *        RED     (R)     -> FAIL (Unrecognized finger / Enroll error)
+ *    - Passive / Active Buzzer:
+ *        VCC -> 3V3 (or 5V)
  *        GND -> GND
- *        I/O -> GPIO 27
+ *        I/O -> GPIO 27 (2.8 kHz PWM tone for crisp sound on passive buzzers)
  *
  *  Required Arduino Libraries (Install via Library Manager):
  *    1. Adafruit Fingerprint Sensor Library
@@ -37,6 +43,7 @@
  */
 
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <Preferences.h>
@@ -46,15 +53,32 @@
 #include <Adafruit_SSD1306.h>
 
 // ===================== 1. USER CONFIGURATION =====================
-// Replace with your Office / College Wi-Fi credentials (2.4 GHz Wi-Fi!)
-const char* WIFI_SSID     = "YOUR_WIFI_NAME";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+// Multi-Wi-Fi List (2.4 GHz networks). ESP32 automatically connects to
+// whichever saved Wi-Fi has the STRONGEST / CLOSEST signal!
+struct WifiCred {
+  const char* ssid;
+  const char* password;
+};
 
-// Backend API Base URL:
-// Option A (Recommended on same Wi-Fi LAN): Your Host PC LAN IP on Port 5000
-const char* API_BASE_URL  = "http://192.168.1.14:5000/api/biometric";
-// Option B (Over Internet from different Wi-Fi): Replace with live Cloudflare URL
-// const char* API_BASE_URL = "https://classes-waterproof-posing-revolution.trycloudflare.com/api/biometric";
+const WifiCred WIFI_NETWORKS[] = {
+  { "CONNECT FIRST LAB",   "flymedia@23"  },
+  { "Flymedia Lab 5G",     "flymedia@24"  },
+  { "Airtel_2nd floor",    "Flymedia@123" },
+  { "Airtel Flymedia Lab", "flymedia@22"  },
+  { "Airtel_Fly media 20", "Air900555"    },
+};
+const int WIFI_NETWORK_COUNT = sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
+
+// Smart Roaming: If current Wi-Fi drops weaker than -82 dBm while walking around,
+// ESP32 automatically scans and switches if another saved Wi-Fi is stronger!
+const int ROAM_RSSI_THRESHOLD = -82;
+
+// Backend API Base URLs:
+// Primary (Fastest on same LAN): Host PC LAN IP on Port 5000
+const char* API_BASE_URL       = "http://192.168.1.72:5000/api/biometric";
+// Auto-Fallback (If Wi-Fi is on a different subnet/router): Live Cloudflare HTTPS URL
+const char* CLOUD_API_BASE_URL = "https://tray-colorado-substitute-chances.trycloudflare.com/api/biometric";
+bool useCloudFallback          = false;
 
 // Device Identity & Secret Key (Must match biometric_devices table on server)
 const char* DEVICE_ID     = "DEVICE001";
@@ -76,9 +100,13 @@ const char* DEVICE_KEY    = "flymedia_esp32_key_2026";
 #define RGB_BLUE_PIN     33
 #define RGB_COMMON_ANODE true
 
-// Active Buzzer (HIGH = ON for most 3-pin active modules; change if active-low)
-#define BUZZER_PIN       27
-#define BUZZER_ACTIVE_HIGH true
+// Buzzer Configuration:
+// Set BUZZER_IS_PASSIVE = true for Passive Buzzer (uses PWM frequency),
+// or false for Active Buzzer (uses direct digital HIGH/LOW).
+#define BUZZER_PIN          27
+#define BUZZER_IS_PASSIVE   true
+#define BUZZER_ACTIVE_HIGH  true
+#define BUZZER_DEFAULT_FREQ 2800  // 2.8 kHz resonant frequency for crisp, loud beep
 
 // ===================== 3. TIMING & SECURITY ======================
 const unsigned long LOCAL_SCAN_COOLDOWN_MS = 3000;   // 3s debounce on device
@@ -92,6 +120,9 @@ HardwareSerial fpSerial(2);
 Adafruit_Fingerprint finger(&fpSerial);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Preferences prefs;
+WiFiMulti wifiMulti;
+bool wifiMultiInitialized = false;
+int weakSignalCount       = 0;
 
 bool oledReady            = false;
 bool sensorReady          = false;
@@ -120,13 +151,85 @@ void setRGB(bool r, bool g, bool b) {
   }
 }
 
-void beep(int durationMs, int count = 1, int gapMs = 80) {
-  for (int i = 0; i < count; i++) {
-    digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? HIGH : LOW);
+// ================= RGB LED STATUS COLOR HELPERS ==================
+// - WHITE   : Sensor IDLE / Ready, waiting for finger
+// - BLUE    : Fingerprint scanning / capturing image
+// - MAGENTA : Fingerprint enrollment in progress (Step 1 & Step 2)
+// - GREEN   : Verification Success OR Enrollment Success
+// - RED     : Verification Fail (Unrecognized) OR Enrollment Fail
+void ledIdle()      { setRGB(true,  true,  true);  } // WHITE (Idle/Ready)
+void ledScanning()  { setRGB(false, false, true);  } // BLUE (Scanning)
+void ledEnrolling() { setRGB(true,  false, true);  } // MAGENTA (Enrolling)
+void ledSuccess()   { setRGB(false, true,  false); } // GREEN (Success)
+void ledFail()      { setRGB(true,  false, false); } // RED (Fail/Error)
+void ledOff()       { setRGB(false, false, false); } // OFF
+
+void playToneRaw(int freq, int durationMs) {
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+    ledcAttach(BUZZER_PIN, freq, 8);
+    ledcWriteTone(BUZZER_PIN, freq);
     delay(durationMs);
-    digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+    ledcWriteTone(BUZZER_PIN, 0);
+    ledcDetach(BUZZER_PIN);
+  #else
+    // ESP32 core 2.x
+    ledcSetup(7, freq, 8);
+    ledcAttachPin(BUZZER_PIN, 7);
+    ledcWriteTone(7, freq);
+    delay(durationMs);
+    ledcWriteTone(7, 0);
+    ledcDetachPin(BUZZER_PIN);
+  #endif
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+void beep(int durationMs, int count = 1, int gapMs = 80, int freq = BUZZER_DEFAULT_FREQ) {
+  for (int i = 0; i < count; i++) {
+    if (BUZZER_IS_PASSIVE) {
+      playToneRaw(freq, durationMs);
+    } else {
+      digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? HIGH : LOW);
+      delay(durationMs);
+      digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+    }
     if (i < count - 1) delay(gapMs);
   }
+}
+
+void runHardwareTest() {
+  Serial.println("\n================ HARDWARE DIAGNOSTIC TEST ================");
+  Serial.println("[LED TEST 1] Testing Common Anode mode (Longest leg on 3V3, pin=LOW):");
+  digitalWrite(RGB_RED_PIN, HIGH); digitalWrite(RGB_GREEN_PIN, HIGH); digitalWrite(RGB_BLUE_PIN, HIGH);
+  Serial.println("  -> RED (G25 = LOW)");
+  digitalWrite(RGB_RED_PIN, LOW); delay(800); digitalWrite(RGB_RED_PIN, HIGH);
+  Serial.println("  -> GREEN (G26 = LOW)");
+  digitalWrite(RGB_GREEN_PIN, LOW); delay(800); digitalWrite(RGB_GREEN_PIN, HIGH);
+  Serial.println("  -> BLUE (G33 = LOW)");
+  digitalWrite(RGB_BLUE_PIN, LOW); delay(800); digitalWrite(RGB_BLUE_PIN, HIGH);
+
+  Serial.println("[LED TEST 2] Testing Common Cathode mode (if longest leg is on GND, pin=HIGH):");
+  digitalWrite(RGB_RED_PIN, LOW); digitalWrite(RGB_GREEN_PIN, LOW); digitalWrite(RGB_BLUE_PIN, LOW);
+  Serial.println("  -> RED (G25 = HIGH)");
+  digitalWrite(RGB_RED_PIN, HIGH); delay(800); digitalWrite(RGB_RED_PIN, LOW);
+  Serial.println("  -> GREEN (G26 = HIGH)");
+  digitalWrite(RGB_GREEN_PIN, HIGH); delay(800); digitalWrite(RGB_GREEN_PIN, LOW);
+  Serial.println("  -> BLUE (G33 = HIGH)");
+  digitalWrite(RGB_BLUE_PIN, HIGH); delay(800); digitalWrite(RGB_BLUE_PIN, LOW);
+
+  Serial.println("[BUZZER TEST] Testing G27 in ALL 3 modes:");
+  Serial.println("  -> Mode A: Active-HIGH (G27 = HIGH for 500ms)");
+  digitalWrite(BUZZER_PIN, HIGH); delay(500); digitalWrite(BUZZER_PIN, LOW); delay(400);
+
+  Serial.println("  -> Mode B: Active-LOW  (G27 = LOW for 500ms)");
+  digitalWrite(BUZZER_PIN, LOW); delay(500); digitalWrite(BUZZER_PIN, HIGH); delay(400);
+
+  Serial.println("  -> Mode C: Passive PWM tone (2000Hz on G27 for 500ms)");
+  tone(BUZZER_PIN, 2000, 500); delay(600); noTone(BUZZER_PIN);
+
+  digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+  setRGB(false, false, true);
+  Serial.println("================ TEST COMPLETE ================\n");
 }
 
 void showOLED(const String& line1, const String& line2 = "", const String& footer = "") {
@@ -168,7 +271,7 @@ void showOLED(const String& line1, const String& line2 = "", const String& foote
 }
 
 void showReadyScreen() {
-  setRGB(false, false, true); // Soft blue = Ready/Idle
+  ledIdle(); // WHITE = Ready/Idle (Waiting for finger)
   int queued = prefs.getInt("q_count", 0);
   String footer = queued > 0 ? ("Pending sync: " + String(queued)) : String(DEVICE_ID);
   showOLED("Place Your Finger", "READY", footer);
@@ -198,41 +301,141 @@ int extractJsonInt(const String& json, const String& key) {
 }
 
 // ===================== 6. NETWORK & HTTP =========================
+int rssiToPercent(int rssi) {
+  if (rssi >= -50) return 100;
+  if (rssi <= -100) return 0;
+  return 2 * (rssi + 100);
+}
+
+const char* rssiToQuality(int rssi) {
+  if (rssi >= -55) return "Excellent";
+  if (rssi >= -67) return "Good";
+  if (rssi >= -78) return "Fair";
+  return "Weak";
+}
+
+bool isSavedNetwork(const String& ssid) {
+  for (int i = 0; i < WIFI_NETWORK_COUNT; i++) {
+    if (ssid == String(WIFI_NETWORKS[i].ssid)) return true;
+  }
+  return false;
+}
+
+void initWifiMulti() {
+  if (wifiMultiInitialized) return;
+  WiFi.mode(WIFI_STA);
+  for (int i = 0; i < WIFI_NETWORK_COUNT; i++) {
+    wifiMulti.addAP(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].password);
+    Serial.printf("[WIFI] Registered saved network #%d: \"%s\"\n", i + 1, WIFI_NETWORKS[i].ssid);
+  }
+  wifiMultiInitialized = true;
+}
+
+void printTargetSignalScan() {
+  Serial.println("[WIFI SCAN] Scanning 2.4 GHz networks for all saved Wi-Fi SSIDs...");
+  int n = WiFi.scanNetworks();
+  int foundSaved = 0;
+  for (int i = 0; i < n; i++) {
+    String s = WiFi.SSID(i);
+    if (isSavedNetwork(s)) {
+      int r = WiFi.RSSI(i);
+      Serial.printf("  -> SAVED FOUND \"%s\" | Signal: %d dBm (%d%% - %s) | Ch: %d\n",
+                    s.c_str(), r, rssiToPercent(r), rssiToQuality(r), WiFi.channel(i));
+      foundSaved++;
+    }
+  }
+  if (foundSaved == 0) {
+    Serial.printf("  -> None of your %d saved Wi-Fi network(s) found in 2.4 GHz range (%d other APs visible).\n",
+                  WIFI_NETWORK_COUNT, n);
+  }
+  WiFi.scanDelete();
+}
+
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
+  initWifiMulti();
   setRGB(false, false, true);
-  showOLED("Connecting Wi-Fi...", WIFI_SSID);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  showOLED("Scanning Wi-Fi...", "Closest Network");
+  Serial.println("--------------------------------------------------");
+  Serial.printf("[WIFI] Searching for STRONGEST among %d saved network(s)...\n", WIFI_NETWORK_COUNT);
 
   unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 12000) {
-    delay(400);
+  while (wifiMulti.run(5000) != WL_CONNECTED && millis() - start < 15000) {
+    delay(300);
     Serial.print(".");
   }
   Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("[WIFI] Connected! ESP32 IP: ");
-    Serial.println(WiFi.localIP());
-    showOLED("System Online", WiFi.localIP().toString());
+    weakSignalCount = 0;
+    int rssi = WiFi.RSSI();
+    Serial.println("[WIFI] CONNECTION SUCCESS! (Closest/Strongest Selected)");
+    Serial.printf("  SSID    : %s\n", WiFi.SSID().c_str());
+    Serial.printf("  IP      : %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("  Signal  : %d dBm (%d%% - %s)\n", rssi, rssiToPercent(rssi), rssiToQuality(rssi));
+    Serial.printf("  Channel : %d\n", WiFi.channel());
+    Serial.println("--------------------------------------------------");
+    showOLED(WiFi.SSID(), String(rssi) + " dBm");
     setRGB(false, true, false);
     beep(80, 2);
-    delay(1200);
+    delay(1000);
   } else {
-    Serial.println("[WIFI] Connection failed. Running in Offline Queue mode.");
-    showOLED("Network Offline", "Queue Mode");
+    Serial.printf("[WIFI] CONNECTION FAILED! (WiFi.status() = %d)\n", (int)WiFi.status());
+    printTargetSignalScan();
+    Serial.println("  -> Running in Offline Queue mode. Will retry automatically.");
+    Serial.println("--------------------------------------------------");
+    showOLED("Wi-Fi Failed", "Offline Mode");
     setRGB(true, false, false);
     beep(250, 1);
-    delay(1200);
+    delay(1000);
   }
 }
 
-int postJson(const String& path, const String& payload, String& responseOut) {
-  if (WiFi.status() != WL_CONNECTED) return -1;
+// Smart Roaming: If multiple Wi-Fi networks are saved and current signal gets weak,
+// check if another saved router nearby is at least 12 dBm stronger and switch to it!
+void checkSmartRoaming() {
+  if (WIFI_NETWORK_COUNT <= 1 || WiFi.status() != WL_CONNECTED) return;
 
-  String fullUrl = String(API_BASE_URL) + path;
+  int currentRssi = WiFi.RSSI();
+  if (currentRssi > ROAM_RSSI_THRESHOLD) {
+    weakSignalCount = 0;
+    return;
+  }
+
+  weakSignalCount++;
+  if (weakSignalCount < 2) return; // Confirm weak signal across 2 pings (10s)
+  weakSignalCount = 0;
+
+  Serial.printf("[ROAM] Current Wi-Fi \"%s\" is weak (%d dBm). Checking for a closer saved router...\n",
+                WiFi.SSID().c_str(), currentRssi);
+
+  String currentSsid = WiFi.SSID();
+  int n = WiFi.scanNetworks();
+  int bestRssi = currentRssi;
+  String bestSsid = currentSsid;
+
+  for (int i = 0; i < n; i++) {
+    String s = WiFi.SSID(i);
+    int r = WiFi.RSSI(i);
+    if (isSavedNetwork(s) && s != currentSsid && r > bestRssi + 12) {
+      bestRssi = r;
+      bestSsid = s;
+    }
+  }
+  WiFi.scanDelete();
+
+  if (bestSsid != currentSsid) {
+    Serial.printf("[ROAM] Stronger saved Wi-Fi found: \"%s\" (%d dBm vs %d dBm)! Switching...\n",
+                  bestSsid.c_str(), bestRssi, currentRssi);
+    WiFi.disconnect(false);
+    delay(300);
+    connectWiFi();
+  }
+}
+
+int postToBase(const String& baseUrl, const String& path, const String& payload, String& responseOut) {
+  String fullUrl = baseUrl + path;
   HTTPClient http;
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
@@ -244,7 +447,7 @@ int postJson(const String& path, const String& payload, String& responseOut) {
     http.begin(plainClient, fullUrl);
   }
 
-  http.setTimeout(8000);
+  http.setTimeout(5000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Key", DEVICE_KEY);
   http.addHeader("X-Device-Id", DEVICE_ID);
@@ -256,6 +459,25 @@ int postJson(const String& path, const String& payload, String& responseOut) {
     responseOut = http.errorToString(code);
   }
   http.end();
+  return code;
+}
+
+int postJson(const String& path, const String& payload, String& responseOut) {
+  if (WiFi.status() != WL_CONNECTED) return -1;
+
+  String primary = useCloudFallback ? String(CLOUD_API_BASE_URL) : String(API_BASE_URL);
+  int code = postToBase(primary, path, payload, responseOut);
+
+  // If LAN server unreachable, auto-switch to Cloudflare HTTPS URL!
+  if (code <= 0) {
+    String secondary = useCloudFallback ? String(API_BASE_URL) : String(CLOUD_API_BASE_URL);
+    Serial.println("[HTTP] Primary failed (" + responseOut + "), trying fallback: " + secondary);
+    int code2 = postToBase(secondary, path, payload, responseOut);
+    if (code2 > 0) {
+      useCloudFallback = !useCloudFallback;
+      return code2;
+    }
+  }
   return code;
 }
 
@@ -332,7 +554,7 @@ void submitAttendanceScan(uint16_t slotId) {
     if (l1.length() == 0) l1 = "Slot #" + String(slotId);
     if (l2.length() == 0) l2 = "Recorded!";
 
-    setRGB(false, true, false); // Green LED
+    ledSuccess(); // GREEN = Verification Success!
     showOLED(l1, l2, "Synced OK");
     beep(120, 1);
     delay(2200);
@@ -342,14 +564,14 @@ void submitAttendanceScan(uint16_t slotId) {
     if (l1.length() == 0) l1 = "Rejected";
     if (l2.length() == 0) l2 = "HTTP " + String(code);
 
-    setRGB(true, false, false); // Red LED
+    ledFail(); // RED = Verification Fail / Rejected
     showOLED(l1, l2);
     beep(350, 2);
     delay(2200);
   } else {
     // Network / Server unreachable -> Save in offline queue!
     enqueueOfflineEvent(slotId, eventId);
-    setRGB(true, true, false); // Yellow LED
+    ledSuccess(); // GREEN = Verification Success (Saved locally)
     showOLED("Saved Offline", "Slot #" + String(slotId), "Will auto-sync");
     beep(100, 2);
     delay(2000);
@@ -365,7 +587,7 @@ bool enrollFingerprint(uint16_t id) {
   }
 
   Serial.printf("\n[ENROLL] Starting 2-scan enrollment for Slot #%d\n", id);
-  setRGB(false, false, true);
+  ledEnrolling(); // MAGENTA = Fingerprint enrollment in progress!
   showOLED("Enroll Slot #" + String(id), "Place Finger");
   beep(100, 2);
 
@@ -375,7 +597,8 @@ bool enrollFingerprint(uint16_t id) {
   while (p != FINGERPRINT_OK) {
     if (millis() - start > 20000) {
       showOLED("Enroll Timeout", "Cancelled");
-      setRGB(true, false, false);
+      ledFail(); // RED = Fail
+      beep(400, 1);
       delay(1500);
       showReadyScreen();
       return false;
@@ -386,7 +609,7 @@ bool enrollFingerprint(uint16_t id) {
 
   if (finger.image2Tz(1) != FINGERPRINT_OK) {
     showOLED("Scan 1 Error", "Try Again");
-    setRGB(true, false, false);
+    ledFail(); // RED = Fail
     beep(300, 1);
     delay(1500);
     showReadyScreen();
@@ -395,19 +618,29 @@ bool enrollFingerprint(uint16_t id) {
 
   showOLED("Scan 1 OK!", "Remove Finger");
   beep(80, 1);
-  delay(1500);
+  
+  // Quick Green Blink confirmation that 1st scan was captured successfully!
+  ledSuccess(); // 🟢 Quick GREEN flash
+  delay(300);
+  ledOff();
+  delay(120);
+  ledEnrolling(); // 🟣 Return to MAGENTA (Pink) for 2nd scan
+  
+  delay(1000);
   while (finger.getImage() != FINGERPRINT_NOFINGER) {
     delay(50);
   }
 
   // --- Second scan (confirmation) ---
   showOLED("Enroll Slot #" + String(id), "Place Again");
+  ledEnrolling(); // 🟣 MAGENTA (Waiting for 2nd scan)
   start = millis();
   p = -1;
   while (p != FINGERPRINT_OK) {
     if (millis() - start > 20000) {
       showOLED("Enroll Timeout", "Cancelled");
-      setRGB(true, false, false);
+      ledFail(); // RED = Fail
+      beep(400, 1);
       delay(1500);
       showReadyScreen();
       return false;
@@ -418,7 +651,7 @@ bool enrollFingerprint(uint16_t id) {
 
   if (finger.image2Tz(2) != FINGERPRINT_OK) {
     showOLED("Scan 2 Error", "Try Again");
-    setRGB(true, false, false);
+    ledFail(); // RED = Fail
     beep(300, 1);
     delay(1500);
     showReadyScreen();
@@ -427,7 +660,7 @@ bool enrollFingerprint(uint16_t id) {
 
   if (finger.createModel() != FINGERPRINT_OK) {
     showOLED("Fingers Did Not", "Match!");
-    setRGB(true, false, false);
+    ledFail(); // RED = Fail
     beep(400, 2);
     delay(1800);
     showReadyScreen();
@@ -436,7 +669,7 @@ bool enrollFingerprint(uint16_t id) {
 
   if (finger.storeModel(id) != FINGERPRINT_OK) {
     showOLED("Store Failed", "Slot #" + String(id));
-    setRGB(true, false, false);
+    ledFail(); // RED = Fail
     beep(400, 2);
     delay(1800);
     showReadyScreen();
@@ -444,11 +677,11 @@ bool enrollFingerprint(uint16_t id) {
   }
 
   Serial.printf("[ENROLL] SUCCESS! Stored in Slot #%d\n", id);
-  setRGB(false, true, false);
+  ledSuccess(); // GREEN = Enroll Success!
   showOLED("Enrolled OK!", "Slot #" + String(id));
   beep(100, 3);
   delay(2000);
-  showReadyScreen();
+  showReadyScreen(); // Returns to WHITE
   return true;
 }
 
@@ -456,7 +689,7 @@ bool deleteFingerprint(uint16_t id) {
   uint8_t p = finger.deleteModel(id);
   if (p == FINGERPRINT_OK) {
     Serial.printf("[DELETE] Deleted Slot #%d\n", id);
-    setRGB(false, true, false);
+    ledSuccess(); // GREEN = Success
     showOLED("Template Deleted", "Slot #" + String(id));
     beep(120, 2);
     delay(1500);
@@ -465,7 +698,7 @@ bool deleteFingerprint(uint16_t id) {
   }
   Serial.printf("[DELETE] Failed to delete Slot #%d (code %d)\n", id, p);
   showOLED("Delete Failed", "Slot #" + String(id));
-  setRGB(true, false, false);
+  ledFail(); // RED = Fail
   delay(1500);
   showReadyScreen();
   return false;
@@ -473,8 +706,13 @@ bool deleteFingerprint(uint16_t id) {
 
 // ===================== 10. HEARTBEAT & REMOTE COMMANDS ===========
 void sendHeartbeatAndCheckCommands() {
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.printf("[LIVE 5s] Wi-Fi: FAILED / DISCONNECTED (status=%d)\n", (int)WiFi.status());
+    printTargetSignalScan();
+    return;
+  }
 
+  int rssi = WiFi.RSSI();
   String safeL1 = currentLine1; safeL1.replace("\"", "'");
   String safeL2 = currentLine2; safeL2.replace("\"", "'");
   String ssidStr = WiFi.SSID(); ssidStr.replace("\"", "'");
@@ -482,7 +720,7 @@ void sendHeartbeatAndCheckCommands() {
   String payload = "{\"device_id\":\"" + String(DEVICE_ID) +
                    "\",\"wifi_ssid\":\"" + ssidStr +
                    "\",\"ip_address\":\"" + WiFi.localIP().toString() +
-                   "\",\"rssi\":" + String(WiFi.RSSI()) +
+                   "\",\"rssi\":" + String(rssi) +
                    ",\"sensor_ready\":" + String(sensorReady ? "true" : "false") +
                    ",\"oled_ready\":" + String(oledReady ? "true" : "false") +
                    ",\"templates_count\":" + String(storedTemplates) +
@@ -493,7 +731,14 @@ void sendHeartbeatAndCheckCommands() {
 
   String resp;
   int code = postJson("/heartbeat", payload, resp);
-  Serial.printf("[HEARTBEAT] HTTP %d | RSSI: %d dBm | IP: %s\n", code, WiFi.RSSI(), WiFi.localIP().toString().c_str());
+  Serial.printf("[LIVE 5s] Wi-Fi: CONNECTED (%s) | Signal: %d dBm (%d%% - %s) | IP: %s | Server: %s (HTTP %d)\n",
+                ssidStr.c_str(),
+                rssi,
+                rssiToPercent(rssi),
+                rssiToQuality(rssi),
+                WiFi.localIP().toString().c_str(),
+                code == 200 ? "OK" : "FAILED",
+                code);
 
   if (code == 200) {
     // Also flush any queued offline scans while server is reachable
@@ -533,6 +778,9 @@ void sendHeartbeatAndCheckCommands() {
       }
     }
   }
+
+  // If signal gets weak while walking around, automatically roam to a stronger saved Wi-Fi
+  checkSmartRoaming();
 }
 
 // ===================== 11. SERIAL MONITOR COMMANDS ===============
@@ -557,6 +805,8 @@ void handleSerialCommands() {
     }
   } else if (line == "TEST") {
     sendHeartbeatAndCheckCommands();
+  } else if (line == "TESTHW") {
+    runHardwareTest();
   } else if (line == "STATUS") {
     finger.getTemplateCount();
     Serial.println("========== TERMINAL STATUS ==========");
@@ -567,7 +817,7 @@ void handleSerialCommands() {
     Serial.println("Queued    : " + String(prefs.getInt("q_count", 0)));
     Serial.println("=====================================");
   } else {
-    Serial.println("Commands: ENROLL <1-1000> | DELETE <1-1000> | CLEAR | TEST | STATUS");
+    Serial.println("Commands: ENROLL <1-1000> | DELETE <1-1000> | CLEAR | TEST | TESTHW | STATUS");
   }
 }
 
@@ -581,7 +831,7 @@ void setup() {
   pinMode(RGB_GREEN_PIN, OUTPUT);
   pinMode(RGB_BLUE_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+  digitalWrite(BUZZER_PIN, BUZZER_IS_PASSIVE ? LOW : (BUZZER_ACTIVE_HIGH ? LOW : HIGH));
   setRGB(false, false, true);
 
   // Initialize NVS flash storage
@@ -674,26 +924,35 @@ void loop() {
     return;
   }
 
+  // Finger detected! LED turns BLUE during scan
+  ledScanning(); // BLUE = Scanning in progress
+  showOLED("Scanning Finger...", "Hold Steady");
+
   p = finger.image2Tz();
   if (p != FINGERPRINT_OK) {
-    delay(100);
+    ledFail(); // RED = Unclear scan fail
+    showOLED("Unclear Scan", "Try Again");
+    beep(250, 1);
+    delay(1200);
+    showReadyScreen(); // Returns to WHITE
     return;
   }
 
   p = finger.fingerSearch();
   if (p == FINGERPRINT_OK) {
     if (millis() - lastScanMs < LOCAL_SCAN_COOLDOWN_MS) {
+      showReadyScreen();
       return;
     }
     lastScanMs = millis();
     failedStrikes = 0;
 
     Serial.printf("[R307] MATCH! Slot #%d (Confidence: %d)\n", finger.fingerID, finger.confidence);
-    submitAttendanceScan(finger.fingerID);
+    submitAttendanceScan(finger.fingerID); // Sets ledSuccess() [GREEN]
   } else if (p == FINGERPRINT_NOTFOUND) {
     failedStrikes++;
     Serial.printf("[R307] NOT RECOGNIZED (Strike %d/%d)\n", failedStrikes, MAX_FAILED_STRIKES);
-    setRGB(true, false, false);
+    ledFail(); // RED = Verification Fail
     showOLED("Not Recognised", "Try Again", "Strike " + String(failedStrikes) + "/3");
     beep(300, 2);
 
@@ -707,8 +966,14 @@ void loop() {
       beep(600, 1);
     } else {
       delay(1500);
-      showReadyScreen();
+      showReadyScreen(); // Returns to WHITE
     }
+  } else {
+    ledFail(); // RED = Other error
+    showOLED("Scan Error", "Code: " + String(p));
+    beep(300, 1);
+    delay(1200);
+    showReadyScreen();
   }
   delay(100);
 }

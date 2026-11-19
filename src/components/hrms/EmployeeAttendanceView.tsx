@@ -66,7 +66,7 @@ export const EmployeeAttendanceView: React.FC = () => {
       </div>
 
       {/* Top Monthly Summary Cards (Section 15) */}
-      <div style={{
+      <div className="stat-grid-2col" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
         gap: '14px'
@@ -143,8 +143,8 @@ export const EmployeeAttendanceView: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+        <div className="table-responsive-wrapper">
+          <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 20px', fontWeight: 700 }}>Date</th>

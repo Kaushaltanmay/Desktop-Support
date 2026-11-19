@@ -99,7 +99,7 @@ export const EngineerDashboard: React.FC<EngineerDashboardProps> = ({
       </div>
 
       {/* 2. Top 4 Stat Cards (Matching screenshot left border stripes) */}
-      <div style={{
+      <div className="stat-grid-2col" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
         gap: '18px'
@@ -146,7 +146,7 @@ export const EngineerDashboard: React.FC<EngineerDashboardProps> = ({
       </div>
 
       {/* 3. Middle Row: Hardware Distribution & Ticket Status Breakdown */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
         gap: '20px'
@@ -245,7 +245,7 @@ export const EngineerDashboard: React.FC<EngineerDashboardProps> = ({
       </div>
 
       {/* 4. Bottom Row: Active Complaints Queue & Recently Resolved */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
         gap: '20px'

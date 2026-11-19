@@ -413,9 +413,9 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
       </div>
 
       {/* Device Grid */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
         gap: '16px'
       }}>
         {filteredDevices.map(d => (
@@ -870,8 +870,8 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
                     Format Validated
                   </span>
                 </div>
-                <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+                <div className="table-responsive-wrapper" style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                  <table style={{ width: '100%', minWidth: '450px', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
                     <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0 }}>
                       <tr>
                         <th style={{ padding: '8px 10px', color: '#64748b' }}>Asset Tag</th>

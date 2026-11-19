@@ -265,8 +265,8 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
               <Fingerprint size={18} color="#0284c7" />
               Enrolled Employees — Biometric UART Slots (R307)
             </h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+            <div className="table-responsive-wrapper">
+              <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
                     <th style={{ padding: '10px 12px' }}>UART Slot</th>
@@ -327,8 +327,8 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
                 No fingerprint Lab IN / OUT entries yet. Scan an enrolled finger on the ESP32 door terminal to log Lab entry and exit times!
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <div className="table-responsive-wrapper">
+                <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
                       <th style={{ padding: '10px 12px' }}>Date</th>
@@ -554,8 +554,8 @@ export const HRAttendanceManagementView: React.FC<HRAttendanceManagementViewProp
               </span>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <div className="table-responsive-wrapper">
+              <table style={{ width: '100%', minWidth: '680px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                     <th style={{ padding: '12px 20px', fontWeight: 700 }}>Employee</th>

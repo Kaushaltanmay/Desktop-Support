@@ -42,14 +42,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       bottom: 0,
       left: 0,
       right: 0,
-      height: '64px',
+      height: 'calc(58px + env(safe-area-inset-bottom, 0px))',
       background: '#ffffff',
       borderTop: '1px solid #e2e8f0',
       alignItems: 'center',
       justifyContent: 'space-around',
       zIndex: 90,
       boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.05)',
-      paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      boxSizing: 'border-box'
     }}>
       {isItSupport ? (
         <>

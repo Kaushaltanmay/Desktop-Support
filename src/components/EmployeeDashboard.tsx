@@ -69,7 +69,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
       </div>
 
       {/* 4 Cards: My Open, Pending, Resolved, Total */}
-      <div style={{
+      <div className="stat-grid-2col" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
         gap: '16px'
@@ -112,7 +112,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
       </div>
 
       {/* Grid: Recent Tickets & Assigned Device */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
         gap: '20px'

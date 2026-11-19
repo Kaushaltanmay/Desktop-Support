@@ -35,9 +35,9 @@ export const SchedulesView: React.FC = () => {
       </div>
 
       {/* Schedules Cards */}
-      <div style={{
+      <div className="grid-responsive-cards" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '18px'
       }}>
         {schedules.map(s => (
