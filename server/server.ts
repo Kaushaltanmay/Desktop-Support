@@ -144,12 +144,31 @@ app.use('/api/biometric', biometricRoutes);
 // Static uploads directory for chat attachments (photos, videos, audio, documents)
 app.use('/uploads', express.static(path.join(process.cwd(), 'server', 'uploads')));
 
+// 3D Enclosure Model & CAD Viewer routes
+const model3dPath = path.join(process.cwd(), '3d_model');
+app.use('/3d', express.static(model3dPath));
+
+app.get('/enclosure', (req: express.Request, res: express.Response) => {
+  res.sendFile(path.join(model3dPath, 'enclosure_3d_viewer.html'));
+});
+
+app.get('/blueprint', (req: express.Request, res: express.Response) => {
+  res.sendFile(path.join(model3dPath, 'enclosure_dimension_blueprint.png'));
+});
+
 // Serve built frontend if dist exists (enables hosting complete app from single port 5000)
 const distPath = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+    if (
+      req.method === 'GET' &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/uploads') &&
+      !req.path.startsWith('/3d') &&
+      req.path !== '/enclosure' &&
+      req.path !== '/blueprint'
+    ) {
       return res.sendFile(path.join(distPath, 'index.html'));
     }
     next();
