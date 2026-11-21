@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fly Media 3D Biometric Terminal Enclosure Viewer</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background: radial-gradient(circle at center, #1e293b 0%, #070d1d 100%);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #canvas-container { width: 100%; height: 100%; position: absolute; top:0; left:0; }
+
+    /* HUD Overlay */
+    .hud-header {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 14px;
+      padding: 16px 22px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .hud-title { font-size: 19px; font-weight: 900; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+    .hud-subtitle { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .specs-strip { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; }
+    .spec-pill { background: #1e293b; padding: 4px 10px; border-radius: 6px; border: 1px solid #334155; }
+    .spec-pill strong { color: #38bdf8; }
+
+    /* Controls Panel */
+    .controls-panel {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 18px 22px;
+      width: 320px;
+      box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+    }
+    .panel-title { font-size: 13px; font-weight: 800; color: #cbd5e1; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .slider-row { margin-bottom: 14px; }
+    .slider-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; color: #94a3b8; }
+    .slider-label span { color: #38bdf8; font-weight: bold; }
+    input[type=range] {
+      width: 100%;
+      accent-color: #38bdf8;
+      height: 5px;
+      background: #334155;
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .btn {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .btn:hover { background: #334155; border-color: #38bdf8; color: #38bdf8; }
+    .btn-primary { background: #0284c7; border-color: #38bdf8; color: #ffffff; }
+    .btn-primary:hover { background: #0369a1; }
+
+    /* Legend / Dimensions Card */
+    .legend-card {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 16px 20px;
+      width: 280px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 11.5px; margin-bottom: 9px; }
+    .color-dot { width: 12px; height: 12px; border-radius: 3px; }
+  </style>
+  <!-- Three.js Bundle -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- Header HUD -->
+  <div class="hud-header">
+    <div class="hud-title">📐 FLY MEDIA BIOMETRIC ENCLOSURE 3D VIEWER</div>
+    <div class="hud-subtitle">Commercial Wall-Mount Access Controller (2.8" TFT + RFID + R307)</div>
+    <div class="specs-strip">
+      <div class="spec-pill">Dimensions: <strong>110 × 165 × 32 mm</strong></div>
+      <div class="spec-pill">Wall: <strong>2.4 mm</strong></div>
+      <div class="spec-pill">Hardware: <strong>M3 Screws</strong></div>
+      <div class="spec-pill">Mount: <strong>Keyhole Slots</strong></div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend-card">
+    <div class="panel-title">Component Layout</div>
+    <div class="legend-item"><div class="color-dot" style="background:#0284c7;"></div> 2.8" SPI Touch TFT Screen (Top)</div>
+    <div class="legend-item"><div class="color-dot" style="background:#10b981;"></div> RC522 RFID Card Tap Zone (Center)</div>
+    <div class="legend-item"><div class="color-dot" style="background:#38bdf8;"></div> R307 Optical Sensor 15° Well (Bottom)</div>
+    <div class="legend-item"><div class="color-dot" style="background:#ef4444;"></div> RGB Status LED (5.2mm Light-pipe)</div>
+    <div class="legend-item"><div class="color-dot" style="background:#f59e0b;"></div> Audio Buzzer Sound Grill (5 Holes)</div>
+    <div class="legend-item"><div class="color-dot" style="background:#64748b;"></div> ESP32 DevKit Internal Mounts</div>
+  </div>
+
+  <!-- Controls Panel -->
+  <div class="controls-panel">
+    <div class="panel-title">Assembly & Export</div>
+    
+    <div class="slider-row">
+      <div class="slider-label">Explode Distance: <span id="explode-val">0 mm</span></div>
+      <input type="range" id="explode-slider" min="0" max="90" value="0" />
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-label">Case Material / Color</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" style="flex:1; background:#0f172a;" onclick="setTheme('#0f172a', '#1e293b')">Matte Black</button>
+        <button class="btn" style="flex:1; background:#475569;" onclick="setTheme('#334155', '#475569')">Slate Grey</button>
+        <button class="btn" style="flex:1; background:#f1f5f9; color:#0f172a;" onclick="setTheme('#f8fafc', '#e2e8f0')">Office White</button>
+      </div>
+    </div>
+
+    <div class="btn-grid">
+      <button class="btn btn-primary" onclick="exportFrontSTL()">📥 Front Shell STL</button>
+      <button class="btn btn-primary" onclick="exportRearSTL()">📥 Rear Base STL</button>
+      <button class="btn" onclick="toggleWireframe()">Toggle Wireframe</button>
+      <button class="btn" onclick="resetCamera()">Reset View</button>
+    </div>
+  </div>
+
+  <script>
+    // Dimensions in mm
+    const W = 110;
+    const H = 165;
+    const D_FRONT = 18;
+    const D_BACK = 14;
+    const R = 8;
+    const WALL = 2.4;
+
+    // Three.js Scene Setup
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1500);
+    camera.position.set(160, 190, 240);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0, 0);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    keyLight.position.set(150, 250, 200);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.5);
+    fillLight.position.set(-150, -100, 100);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    rimLight.position.set(0, -200, -200);
+    scene.add(rimLight);
+
+    // Materials
+    let shellMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      roughness: 0.35,
+      metalness: 0.15,
+      side: THREE.DoubleSide
+    });
+
+    let rearMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      roughness: 0.45,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+
+    // Groups
+    const assemblyGroup = new THREE.Group();
+    const frontGroup = new THREE.Group();
+    const rearGroup = new THREE.Group();
+    const internalGroup = new THREE.Group();
+
+    assemblyGroup.add(frontGroup);
+    assemblyGroup.add(rearGroup);
+    assemblyGroup.add(internalGroup);
+    scene.add(assemblyGroup);
+
+    // Helper: Rounded Rect Shape
+    function createRoundedRectShape(w, h, r) {
+      const shape = new THREE.Shape();
+      const x = -w/2, y = -h/2;
+      shape.moveTo(x + r, y);
+      shape.lineTo(x + w - r, y);
+      shape.absarc(x + w - r, y + r, r, -Math.PI/2, 0, false);
+      shape.lineTo(x + w, y + h - r);
+      shape.absarc(x + w - r, y + h - r, r, 0, Math.PI/2, false);
+      shape.lineTo(x + r, y + h);
+      shape.absarc(x + r, y + h - r, r, Math.PI/2, Math.PI, false);
+      shape.lineTo(x, y + r);
+      shape.absarc(x + r, y + r, r, Math.PI, Math.PI*1.5, false);
+      return shape;
+    }
+
+    // ================= 1. FRONT BEZEL SHELL =================
+    // Faceplate with all component holes
+    const frontFaceShape = createRoundedRectShape(W, H, R);
+
+    // Hole A: 2.8" Screen Window (46 x 61 mm at y = +36)
+    const tftHole = new THREE.Path();
+    const tw = 46, th = 61, ty = 36;
+    tftHole.moveTo(-tw/2, ty - th/2);
+    tftHole.lineTo(tw/2, ty - th/2);
+    tftHole.lineTo(tw/2, ty + th/2);
+    tftHole.lineTo(-tw/2, ty + th/2);
+    tftHole.closePath();
+    frontFaceShape.holes.push(tftHole);
+
+    // Hole B: R307 Fingerprint Well (21 x 17 mm at y = -48)
+    const r307Hole = new THREE.Path();
+    const fw = 21, fh = 17, fy = -48;
+    r307Hole.moveTo(-fw/2, fy - fh/2);
+    r307Hole.lineTo(fw/2, fy - fh/2);
+    r307Hole.lineTo(fw/2, fy + fh/2);
+    r307Hole.lineTo(-fw/2, fy + fh/2);
+    r307Hole.closePath();
+    frontFaceShape.holes.push(r307Hole);
+
+    // Hole C: RGB LED (5.2mm dia at x = +36, y = +50)
+    const ledHole = new THREE.Path();
+    ledHole.absarc(36, 50, 2.6, 0, Math.PI * 2, true);
+    frontFaceShape.holes.push(ledHole);
+
+    // Hole D: Buzzer Grill (5 pinholes at x = +36, y = +20)
+    [ [0,0], [3,0], [-3,0], [0,3], [0,-3] ].forEach(([dx, dy]) => {
+      const bHole = new THREE.Path();
+      bHole.absarc(36 + dx, 20 + dy, 1.0, 0, Math.PI * 2, true);
+      frontFaceShape.holes.push(bHole);
+    });
+
+    const frontFaceGeo = new THREE.ExtrudeGeometry(frontFaceShape, {
+      depth: WALL,
+      bevelEnabled: true,
+      bevelSegments: 3,
+      bevelThickness: 1.0,
+      bevelSize: 0.8
+    });
+    const frontFaceMesh = new THREE.Mesh(frontFaceGeo, shellMat);
+    frontFaceMesh.castShadow = true;
+    frontFaceMesh.position.z = D_FRONT/2 - WALL;
+    frontGroup.add(frontFaceMesh);
+
+    // Front Side Walls (Extrusion frame)
+    const wallOuterShape = createRoundedRectShape(W, H, R);
+    const wallInnerShape = createRoundedRectShape(W - 2*WALL, H - 2*WALL, R - 1.5);
+    wallOuterShape.holes.push(wallInnerShape);
+
+    const frontWallsGeo = new THREE.ExtrudeGeometry(wallOuterShape, {
+      depth: D_FRONT - WALL,
+      bevelEnabled: false
+    });
+    const frontWallsMesh = new THREE.Mesh(frontWallsGeo, shellMat);
+    frontWallsMesh.castShadow = true;
+    frontWallsMesh.position.z = -D_FRONT/2;
+    frontGroup.add(frontWallsMesh);
+
+    // Corner Screw Bosses (Front)
+    const bossGeo = new THREE.CylinderGeometry(4.2, 4.2, D_FRONT - WALL, 16);
+    const bossPositions = [
+      [W/2 - 8, H/2 - 8],
+      [-W/2 + 8, H/2 - 8],
+      [W/2 - 8, -H/2 + 8],
+      [-W/2 + 8, -H/2 + 8]
+    ];
+    bossPositions.forEach(([bx, by]) => {
+      const bMesh = new THREE.Mesh(bossGeo, shellMat);
+      bMesh.rotation.x = Math.PI / 2;
+      bMesh.position.set(bx, by, 0);
+      frontGroup.add(bMesh);
+    });
+
+    // Embossed RFID Card Outline on Front
+    const rfidEmbossGeo = new THREE.BoxGeometry(42, 28, 0.8);
+    const rfidEmbossMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3 });
+    const rfidEmbossMesh = new THREE.Mesh(rfidEmbossGeo, rfidEmbossMat);
+    rfidEmbossMesh.position.set(0, -3, D_FRONT/2 + 0.5);
+    frontGroup.add(rfidEmbossMesh);
+
+    // ================= 2. REAR BASEPLATE SHELL =================
+    const rearFaceShape = createRoundedRectShape(W, H, R);
+    // Keyhole 1 & 2
+    const kh1 = new THREE.Path();
+    kh1.absarc(0, 45, 4.0, 0, Math.PI * 2, true);
+    rearFaceShape.holes.push(kh1);
+    const kh2 = new THREE.Path();
+    kh2.absarc(0, -45, 4.0, 0, Math.PI * 2, true);
+    rearFaceShape.holes.push(kh2);
+    // Center Cable pass hole (20mm dia)
+    const cableHole = new THREE.Path();
+    cableHole.absarc(0, 0, 10.0, 0, Math.PI * 2, true);
+    rearFaceShape.holes.push(cableHole);
+
+    const rearFaceGeo = new THREE.ExtrudeGeometry(rearFaceShape, {
+      depth: WALL,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      bevelThickness: 0.8,
+      bevelSize: 0.8
+    });
+    const rearFaceMesh = new THREE.Mesh(rearFaceGeo, rearMat);
+    rearFaceMesh.position.z = -D_BACK;
+    rearGroup.add(rearFaceMesh);
+
+    // Rear Walls with Interlocking Lip
+    const rearWallsGeo = new THREE.ExtrudeGeometry(wallOuterShape, {
+      depth: D_BACK,
+      bevelEnabled: false
+    });
+    const rearWallsMesh = new THREE.Mesh(rearWallsGeo, rearMat);
+    rearWallsMesh.position.z = -D_BACK;
+    rearGroup.add(rearWallsMesh);
+
+    // ESP32 Standoffs (Rear)
+    const esp32StandoffGeo = new THREE.CylinderGeometry(3.0, 3.0, 6.0, 16);
+    const espStandoffMat = new THREE.MeshStandardMaterial({ color: 0x475569 });
+    [ [12.5, 25], [-12.5, 25], [12.5, -25], [-12.5, -25] ].forEach(([ex, ey]) => {
+      const eMesh = new THREE.Mesh(esp32StandoffGeo, espStandoffMat);
+      eMesh.rotation.x = Math.PI / 2;
+      eMesh.position.set(ex, ey, -D_BACK + WALL + 3.0);
+      rearGroup.add(eMesh);
+    });
+
+    // ================= 3. INTERNAL COMPONENTS VISUALIZATION =================
+    // 2.8" LCD Glass & PCB
+    const lcdPcbGeo = new THREE.BoxGeometry(50.5, 86, 1.6);
+    const lcdPcbMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c }); // Red PCB
+    const lcdPcbMesh = new THREE.Mesh(lcdPcbGeo, lcdPcbMat);
+    lcdPcbMesh.position.set(0, 36, D_FRONT/2 - 2.8);
+    internalGroup.add(lcdPcbMesh);
+
+    const lcdGlassGeo = new THREE.BoxGeometry(43.2, 57.6, 1.2);
+    const lcdGlassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1 });
+    const lcdGlassMesh = new THREE.Mesh(lcdGlassGeo, lcdGlassMat);
+    lcdGlassMesh.position.set(0, 36, D_FRONT/2 - 1.2);
+    internalGroup.add(lcdGlassMesh);
+
+    // R307 Optical Sensor Block
+    const r307Geo = new THREE.BoxGeometry(20.5, 16.5, 22);
+    const r307Mat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.2 });
+    const r307Mesh = new THREE.Mesh(r307Geo, r307Mat);
+    r307Mesh.position.set(0, -48, D_FRONT/2 - 8);
+    internalGroup.add(r307Mesh);
+
+    // RC522 RFID Antenna PCB
+    const rfidPcbGeo = new THREE.BoxGeometry(40, 60, 1.6);
+    const rfidPcbMat = new THREE.MeshStandardMaterial({ color: 0x0284c7 });
+    const rfidPcbMesh = new THREE.Mesh(rfidPcbGeo, rfidPcbMat);
+    rfidPcbMesh.position.set(0, -3, D_FRONT/2 - 3.5);
+    internalGroup.add(rfidPcbMesh);
+
+    // ESP32 Board
+    const esp32Geo = new THREE.BoxGeometry(28, 55, 4.0);
+    const esp32Mat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+    const esp32Mesh = new THREE.Mesh(esp32Geo, esp32Mat);
+    esp32Mesh.position.set(0, 0, -D_BACK + WALL + 5.0);
+    internalGroup.add(esp32Mesh);
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // UI Controls Handlers
+    const explodeSlider = document.getElementById('explode-slider');
+    const explodeVal = document.getElementById('explode-val');
+    function applyExplode(val) {
+      explodeSlider.value = val;
+      explodeVal.innerText = val + ' mm';
+      rearGroup.position.z = -val;
+      internalGroup.position.z = -val * 0.45;
+    }
+    explodeSlider.addEventListener('input', (e) => {
+      applyExplode(parseFloat(e.target.value));
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('explode')) {
+      applyExplode(parseFloat(urlParams.get('explode')) || 45);
+    }
+
+    function setTheme(color1, color2) {
+      shellMat.color.set(color1);
+      rearMat.color.set(color2);
+    }
+
+    let wireframe = false;
+    function toggleWireframe() {
+      wireframe = !wireframe;
+      shellMat.wireframe = wireframe;
+      rearMat.wireframe = wireframe;
+    }
+
+    function resetCamera() {
+      camera.position.set(160, 190, 240);
+      controls.target.set(0, 0, 0);
+    }
+
+    // Exporters
+    function exportFrontSTL() {
+      const exporter = new THREE.STLExporter();
+      const stlString = exporter.parse(frontGroup, { binary: true });
+      const blob = new Blob([stlString], { type: 'application/octet-stream' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'FlyMedia_Terminal_Front_Shell.stl';
+      link.click();
+    }
+
+    function exportRearSTL() {
+      const exporter = new THREE.STLExporter();
+      const stlString = exporter.parse(rearGroup, { binary: true });
+      const blob = new Blob([stlString], { type: 'application/octet-stream' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'FlyMedia_Terminal_Rear_Baseplate.stl';
+      link.click();
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
