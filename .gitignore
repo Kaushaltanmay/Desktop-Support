@@ -45,3 +45,9 @@ server/uploads/*
 # Built mobile APK binaries
 *.apk
 
+
+.git_corrupted
+.git_corrupted/*
+
+android/app/src/main/assets/public_bad
+android/app/src/main/assets/public_bad/*
