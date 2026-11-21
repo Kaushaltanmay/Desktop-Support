@@ -175,6 +175,7 @@
     <div class="btn-grid">
       <button class="btn btn-primary" onclick="exportFrontSTL()">📥 Front Shell STL</button>
       <button class="btn btn-primary" onclick="exportRearSTL()">📥 Rear Base STL</button>
+      <button class="btn" id="dim-btn" style="border-color:#38bdf8; color:#38bdf8;" onclick="toggleDimensions()">📏 Dimensions (cm)</button>
       <button class="btn" onclick="toggleWireframe()">Wireframe</button>
       <button class="btn" onclick="resetCamera()">Reset View</button>
     </div>
@@ -526,6 +527,115 @@
     esp32Group.add(esp32Shield);
     esp32Group.position.set(0, 0, -D_BACK + WALL + 7.0);
 
+    
+    // =========================================================================
+    // 5. 3D FLOATING DIMENSION ARROWS & PART LABELS (IN CENTIMETERS - cm)
+    // =========================================================================
+    const dimGroup = new THREE.Group();
+    assemblyGroup.add(dimGroup);
+
+    function createTextSprite(text, bgColor = 'rgba(15,23,42,0.92)', textColor = '#38bdf8', fontSize = 24) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 80;
+      const ctx = canvas.getContext('2d');
+      
+      // Rounded Card
+      ctx.fillStyle = bgColor;
+      ctx.strokeStyle = textColor;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.roundRect(8, 8, 384, 64, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = textColor;
+      ctx.font = 'bold ' + fontSize + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 200, 40);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(40, 8, 1);
+      return sprite;
+    }
+
+    function createArrowLine3D(start, end, color = 0x38bdf8) {
+      const g = new THREE.Group();
+      const dir = new THREE.Vector3().subVectors(end, start);
+      
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([start, end]);
+      const lineMat = new THREE.LineBasicMaterial({ color: color, linewidth: 2.5, depthTest: false });
+      const line = new THREE.Line(lineGeo, lineMat);
+      g.add(line);
+
+      // Cones at start and end
+      const coneGeo = new THREE.ConeGeometry(2.2, 5.5, 16);
+      const coneMat = new THREE.MeshBasicMaterial({ color: color, depthTest: false });
+      
+      const cone1 = new THREE.Mesh(coneGeo, coneMat);
+      cone1.position.copy(start);
+      cone1.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+      g.add(cone1);
+
+      const cone2 = new THREE.Mesh(coneGeo, coneMat);
+      cone2.position.copy(end);
+      cone2.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate().normalize());
+      g.add(cone2);
+
+      return g;
+    }
+
+    // 1. Overall Width: 11.5 cm (above top)
+    const arrowW = createArrowLine3D(new THREE.Vector3(-W/2, H/2 + 16, D_FRONT/2), new THREE.Vector3(W/2, H/2 + 16, D_FRONT/2), 0x38bdf8);
+    const labelW = createTextSprite('WIDTH: 11.5 cm', 'rgba(15,23,42,0.92)', '#38bdf8', 22);
+    labelW.position.set(0, H/2 + 26, D_FRONT/2);
+    dimGroup.add(arrowW);
+    dimGroup.add(labelW);
+
+    // 2. Overall Height: 18.5 cm (left of case)
+    const arrowH = createArrowLine3D(new THREE.Vector3(-W/2 - 18, -H/2, D_FRONT/2), new THREE.Vector3(-W/2 - 18, H/2, D_FRONT/2), 0x38bdf8);
+    const labelH = createTextSprite('HEIGHT: 18.5 cm', 'rgba(15,23,42,0.92)', '#38bdf8', 22);
+    labelH.position.set(-W/2 - 40, 0, D_FRONT/2);
+    dimGroup.add(arrowH);
+    dimGroup.add(labelH);
+
+    // 3. Overall Depth: 3.4 cm (along side)
+    const arrowD = createArrowLine3D(new THREE.Vector3(W/2 + 18, -H/2 + 20, -D_BACK), new THREE.Vector3(W/2 + 18, -H/2 + 20, D_FRONT/2), 0x38bdf8);
+    const labelD = createTextSprite('DEPTH: 3.4 cm', 'rgba(15,23,42,0.92)', '#38bdf8', 22);
+    labelD.position.set(W/2 + 42, -H/2 + 20, 0);
+    dimGroup.add(arrowD);
+    dimGroup.add(labelD);
+
+    // 4. TFT Screen Cutout Label (4.8 x 6.5 cm)
+    const tftTag = createTextSprite('📺 TFT SCREEN: 4.8 × 6.5 cm', 'rgba(2,132,199,0.95)', '#ffffff', 20);
+    tftTag.position.set(0, 48, D_FRONT/2 + 12);
+    dimGroup.add(tftTag);
+
+    // 5. RFID Tap Window Label (4.2 x 5.8 cm)
+    const rfidTag = createTextSprite('💳 RFID POCKET: 4.2 × 5.8 cm', 'rgba(245,158,11,0.95)', '#ffffff', 20);
+    rfidTag.position.set(0, -12, D_FRONT/2 + 12);
+    dimGroup.add(rfidTag);
+
+    // 6. R307 Optical Sensor Label (2.4 x 2.0 cm)
+    const r307Tag = createTextSprite('👆 R307 SENSOR: 2.4 × 2.0 cm', 'rgba(168,85,247,0.95)', '#ffffff', 20);
+    r307Tag.position.set(0, -65, D_FRONT/2 + 12);
+    dimGroup.add(r307Tag);
+
+    // 7. RGB LED Label (Ø 0.65 cm)
+    const ledTag = createTextSprite('🔴🟢 LED: Ø 0.65 cm', 'rgba(22,163,74,0.95)', '#ffffff', 18);
+    ledTag.scale.set(30, 7, 1);
+    ledTag.position.set(40, 78, D_FRONT/2 + 10);
+    dimGroup.add(ledTag);
+
+    // 8. Buzzer Label (Ø 1.2 cm)
+    const buzzerTag = createTextSprite('🔊 BUZZER: Ø 1.2 cm', 'rgba(245,158,11,0.95)', '#ffffff', 18);
+    buzzerTag.scale.set(30, 7, 1);
+    buzzerTag.position.set(40, 22, D_FRONT/2 + 10);
+    dimGroup.add(buzzerTag);
+
     // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
@@ -577,6 +687,13 @@
     }
 
     let wireframe = false;
+    let showDims = true;
+    function toggleDimensions() {
+      showDims = !showDims;
+      dimGroup.visible = showDims;
+      document.getElementById('dim-btn').style.borderColor = showDims ? '#38bdf8' : '#475569';
+      document.getElementById('dim-btn').style.color = showDims ? '#38bdf8' : '#f8fafc';
+    }
     function toggleWireframe() {
       wireframe = !wireframe;
       shellMat.wireframe = wireframe;
